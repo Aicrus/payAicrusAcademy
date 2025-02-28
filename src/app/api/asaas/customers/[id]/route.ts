@@ -1,9 +1,9 @@
-import { NextResponse, NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { updateCustomer, deleteCustomer, type CustomerData } from '@/services/asaas/customer';
 import { supabase } from '@/lib/supabase';
 
 export async function PUT(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -47,7 +47,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -86,10 +86,10 @@ export async function DELETE(
 
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const asaasId = context.params.id;
+    const asaasId = params.id;
 
     if (!asaasId) {
       return NextResponse.json(
