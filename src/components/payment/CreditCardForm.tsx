@@ -239,7 +239,7 @@ export default function CreditCardForm() {
           value: parcelaInfo.valorTotal,
           creditCard: {
             holderName: formData.holderName,
-            number: formData.number,
+            number: formData.number.replace(/\D/g, ''),
             expiryMonth: formData.expiryMonth,
             expiryYear: formData.expiryYear,
             ccv: formData.ccv
@@ -250,51 +250,44 @@ export default function CreditCardForm() {
             cpfCnpj: formData.cpf.replace(/\D/g, ''),
             postalCode: formData.postalCode.replace(/\D/g, ''),
             addressNumber: formData.addressNumber,
-            addressComplement: formData.addressComplement,
-            phone: formData.phone.replace(/\D/g, ''),
-            mobilePhone: formData.phone.replace(/\D/g, '')
+            addressComplement: formData.addressComplement || undefined,
+            phone: formData.phone.replace(/\D/g, '')
           },
           installmentCount: selectedInstallment,
-          installmentValue: parcelaInfo.valorParcela
+          transactionId: transaction.id
         })
       });
 
       if (!responseCreditCard.ok) {
-        const errorText = await responseCreditCard.text();
-        let errorMessage = 'Falha ao processar pagamento';
-        
+        let errorMessage = 'Erro ao processar pagamento';
         try {
-          const errorData = JSON.parse(errorText);
-          if (errorData.error) {
-            errorMessage = errorData.error;
-            
-            // Log detalhado do erro
-            console.error('Detalhes do erro:', {
-              message: errorData.error,
-              status: responseCreditCard.status,
-              statusText: responseCreditCard.statusText
-            });
-          }
-        } catch (e) {
-          console.error('Erro ao processar resposta de erro:', {
-            text: errorText,
-            parseError: e
+          const errorData = await responseCreditCard.json();
+          console.error('Detalhes do erro:', {
+            message: errorData.error,
+            status: responseCreditCard.status,
+            statusText: responseCreditCard.statusText,
+            data: errorData
           });
+
+          // Mensagens de erro mais específicas
+          if (errorData.error?.includes('não autorizada')) {
+            errorMessage = 'Transação não autorizada. Por favor, verifique os dados do cartão e tente novamente.';
+          } else if (errorData.error?.includes('cartão inválido')) {
+            errorMessage = 'Número do cartão inválido. Por favor, verifique e tente novamente.';
+          } else if (errorData.error?.includes('expirado')) {
+            errorMessage = 'Cartão expirado. Por favor, use um cartão válido.';
+          } else if (errorData.error?.includes('CVV')) {
+            errorMessage = 'Código de segurança (CVV) inválido. Por favor, verifique e tente novamente.';
+          } else if (errorData.error?.includes('limite')) {
+            errorMessage = 'Limite do cartão insuficiente. Por favor, use outro cartão ou entre em contato com seu banco.';
+          }
+
+          setError(errorMessage);
+        } catch (jsonError) {
+          console.error('Erro ao processar resposta de erro:', jsonError);
+          setError(errorMessage);
         }
-        
-        // Adicionar mensagem amigável para o usuário
-        let userMessage = errorMessage;
-        if (errorMessage.includes('não autorizada')) {
-          userMessage = 'Transação não autorizada. Por favor, verifique os dados do cartão e tente novamente. Se o problema persistir, entre em contato com seu banco.';
-        } else if (errorMessage.includes('cartão inválido')) {
-          userMessage = 'O número do cartão informado é inválido. Por favor, verifique e tente novamente.';
-        } else if (errorMessage.includes('expirado')) {
-          userMessage = 'O cartão está expirado. Por favor, use um cartão válido.';
-        } else if (errorMessage.includes('saldo insuficiente')) {
-          userMessage = 'Saldo insuficiente. Por favor, verifique com seu banco ou use outro cartão.';
-        }
-        
-        throw new Error(userMessage);
+        return;
       }
 
       const data: CreditCardPaymentResponse = await responseCreditCard.json();
