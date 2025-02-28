@@ -294,31 +294,19 @@ export default function CreditCardForm() {
 
         if (!responseCreditCard.ok) {
           const errorData = await responseCreditCard.json();
-          console.error('Detalhes do erro:', {
-            message: errorData.errors?.[0]?.description || errorData.error,
+          console.error('Detalhes da resposta:', {
             status: responseCreditCard.status,
             statusText: responseCreditCard.statusText,
-            errors: errorData.errors
+            responseBody: errorData,
+            rawError: JSON.stringify(errorData)
           });
 
           let errorMessage = 'Erro ao processar pagamento';
 
-          if (errorData.errors?.[0]?.description) {
-            const description = errorData.errors[0].description.toLowerCase();
-            
-            if (description.includes('não autorizada') || description.includes('não autorizado')) {
-              errorMessage = 'Transação não autorizada. Verifique os dados do cartão ou entre em contato com seu banco.';
-            } else if (description.includes('cartão inválido') || description.includes('número do cartão')) {
-              errorMessage = 'Número do cartão inválido. Por favor, verifique os números digitados.';
-            } else if (description.includes('expirado') || description.includes('expiração')) {
-              errorMessage = 'Cartão expirado ou data de validade incorreta. Por favor, verifique.';
-            } else if (description.includes('cvv') || description.includes('código de segurança')) {
-              errorMessage = 'Código de segurança (CVV) inválido. Verifique o código no verso do cartão.';
-            } else if (description.includes('limite') || description.includes('saldo')) {
-              errorMessage = 'Limite indisponível. Por favor, use outro cartão ou entre em contato com seu banco.';
-            } else {
-              errorMessage = description.charAt(0).toUpperCase() + description.slice(1);
-            }
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          } else if (errorData.errors && errorData.errors.length > 0) {
+            errorMessage = errorData.errors[0].description;
           }
 
           setError(errorMessage);
