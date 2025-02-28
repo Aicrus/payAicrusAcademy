@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       creditCardHolderInfo,
       installmentCount,
       installmentValue,
-      remoteIp
+      transactionId
     } = body;
 
     // Validar dados obrigatórios
@@ -27,6 +27,11 @@ export async function POST(request: Request) {
     // Data de vencimento: hoje
     const dueDate = format(new Date(), 'yyyy-MM-dd');
 
+    // Obter IP do cliente
+    const remoteIp = request.headers.get('x-forwarded-for') || 
+                    request.headers.get('x-real-ip') || 
+                    '127.0.0.1';
+
     // Criar pagamento
     const payment = await createCreditCardPayment({
       customer: customerId,
@@ -34,11 +39,16 @@ export async function POST(request: Request) {
       value: Number(value),
       dueDate,
       description,
+      externalReference: transactionId,
       creditCard,
       creditCardHolderInfo,
       installmentCount: installmentCount || 1,
       installmentValue: installmentValue || value,
-      remoteIp: remoteIp || request.headers.get('x-forwarded-for') || '127.0.0.1'
+      remoteIp,
+      callback: {
+        successUrl: process.env.NEXT_PUBLIC_SUCCESS_URL || 'https://www.aicrustech.com/',
+        autoRedirect: true
+      }
     });
 
     return NextResponse.json({

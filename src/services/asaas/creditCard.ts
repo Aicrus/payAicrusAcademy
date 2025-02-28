@@ -31,6 +31,10 @@ export interface CreditCardPaymentData {
   installmentCount?: number;
   installmentValue?: number;
   remoteIp: string;
+  callback?: {
+    successUrl: string;
+    autoRedirect: boolean;
+  };
 }
 
 export interface CreditCardPayment {
@@ -83,7 +87,7 @@ export async function createCreditCardPayment(data: CreditCardPaymentData): Prom
       access_token: headers.access_token ? '***' : undefined
     });
 
-    // Adicionar callback URL e remover notificações
+    // Preparar dados do pagamento
     const paymentData = {
       ...data,
       postalService: false,

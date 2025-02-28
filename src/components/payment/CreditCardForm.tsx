@@ -283,9 +283,11 @@ export default function CreditCardForm() {
               postalCode: formData.postalCode.replace(/\D/g, ''),
               addressNumber: formData.addressNumber,
               addressComplement: formData.addressComplement || undefined,
-              phone: formData.phone.replace(/\D/g, '')
+              phone: formData.phone.replace(/\D/g, ''),
+              mobilePhone: formData.phone.replace(/\D/g, '')
             },
             installmentCount: selectedInstallment,
+            installmentValue: parcelaInfo.valorParcela,
             transactionId: transaction.id
           })
         });
@@ -367,6 +369,7 @@ export default function CreditCardForm() {
           ? err.message 
           : 'Erro ao processar pagamento. Por favor, tente novamente.'
       );
+      setLoading(false);
     }
   };
 
