@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { updateCustomer, deleteCustomer, type CustomerData } from '@/services/asaas/customer';
 import { supabase } from '@/lib/supabase';
 
@@ -85,11 +85,11 @@ export async function DELETE(
 }
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  context: { params: { id: string } }
 ) {
   try {
-    const asaasId = params.id;
+    const asaasId = context.params.id;
 
     if (!asaasId) {
       return NextResponse.json(

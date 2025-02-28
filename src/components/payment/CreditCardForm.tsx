@@ -70,19 +70,19 @@ export default function CreditCardForm() {
   });
   const [showAdditionalFields, setShowAdditionalFields] = useState(false);
 
-  const checkCardFieldsComplete = () => {
-    return (
-      formData.holderName.trim() !== '' &&
-      formData.number.replace(/\D/g, '').length >= 13 &&
-      formData.expiryMonth !== '' &&
-      formData.expiryYear !== '' &&
-      formData.ccv.length === 3
-    );
-  };
-
   useEffect(() => {
+    const checkCardFieldsComplete = () => {
+      return (
+        formData.holderName.trim() !== '' &&
+        formData.number.replace(/\D/g, '').length >= 13 &&
+        formData.expiryMonth !== '' &&
+        formData.expiryYear !== '' &&
+        formData.ccv.length === 3
+      );
+    };
+
     setShowAdditionalFields(checkCardFieldsComplete());
-  }, [formData.holderName, formData.number, formData.expiryMonth, formData.expiryYear, formData.ccv, checkCardFieldsComplete]);
+  }, [formData.holderName, formData.number, formData.expiryMonth, formData.expiryYear, formData.ccv]);
 
   useEffect(() => {
     if (userInfo) {

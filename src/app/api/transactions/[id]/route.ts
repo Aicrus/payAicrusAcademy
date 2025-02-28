@@ -9,6 +9,8 @@ export async function PATCH(
     const data = await request.json();
     const id = Number(params.id);
 
+    console.log('Dados recebidos para atualização:', { id, data });
+
     if (!id) {
       return NextResponse.json(
         { error: 'ID da transação inválido' },
@@ -16,31 +18,43 @@ export async function PATCH(
       );
     }
 
+    // Mapear os campos da nova estrutura para a antiga
+    const mappedData = {
+      ...data,
+      valor: data.valor || data.amount,
+      metodoPagamento: data.metodoPagamento || data.paymentMethod,
+      idPayAsaas: data.idPayAsaas || data.paymentId,
+      dataHora: new Date().toISOString(),
+    };
+
+    console.log('Dados mapeados para atualização:', mappedData);
+
     // Atualizar transação no Supabase
     const { data: transaction, error } = await supabase
       .from('transacoes')
-      .update({
-        ...data,
-        dataHora: new Date().toISOString(),
-      })
+      .update(mappedData)
       .eq('id', id)
       .select()
       .single();
 
     if (error) {
-      console.error('Erro ao atualizar transação:', error);
+      console.error('Erro detalhado do Supabase:', error);
       return NextResponse.json(
-        { error: 'Erro ao atualizar transação' },
+        { error: `Erro ao atualizar transação: ${error.message}` },
         { status: 500 }
       );
     }
 
+    console.log('Transação atualizada com sucesso:', transaction);
     return NextResponse.json(transaction);
   } catch (error) {
-    console.error('Erro ao processar requisição:', error);
+    console.error('Erro detalhado ao processar requisição:', error);
     return NextResponse.json(
-      { error: 'Erro interno do servidor' },
+      { error: error instanceof Error ? error.message : 'Erro interno do servidor' },
       { status: 500 }
     );
   }
-} 
+}
+
+// Alias PUT para PATCH
+export const PUT = PATCH; 

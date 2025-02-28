@@ -47,6 +47,27 @@ export interface CreditCardPayment {
 
 export async function createCreditCardPayment(data: CreditCardPaymentData): Promise<CreditCardPayment> {
   try {
+    // Validações básicas
+    if (!data.creditCard.number || data.creditCard.number.replace(/\D/g, '').length < 13) {
+      throw new Error('Número do cartão inválido');
+    }
+
+    if (!data.creditCard.holderName || data.creditCard.holderName.length < 3) {
+      throw new Error('Nome do titular inválido');
+    }
+
+    if (!data.creditCard.ccv || data.creditCard.ccv.length < 3) {
+      throw new Error('Código de segurança inválido');
+    }
+
+    if (!data.creditCardHolderInfo.cpfCnpj || data.creditCardHolderInfo.cpfCnpj.length < 11) {
+      throw new Error('CPF inválido');
+    }
+
+    if (!data.creditCardHolderInfo.postalCode || data.creditCardHolderInfo.postalCode.length < 8) {
+      throw new Error('CEP inválido');
+    }
+
     console.log('Iniciando pagamento com cartão de crédito...', {
       customer: data.customer,
       value: data.value,
@@ -62,9 +83,10 @@ export async function createCreditCardPayment(data: CreditCardPaymentData): Prom
       access_token: headers.access_token ? '***' : undefined
     });
 
-    // Adicionar callback URL
+    // Adicionar callback URL e remover notificações
     const paymentData = {
       ...data,
+      postalService: false,
       callback: {
         successUrl: process.env.NEXT_PUBLIC_SUCCESS_URL || 'https://www.aicrustech.com/',
         autoRedirect: true
@@ -85,7 +107,27 @@ export async function createCreditCardPayment(data: CreditCardPaymentData): Prom
         statusText: response.statusText,
         data: responseData
       });
-      throw new Error(responseData.errors?.[0]?.description || 'Erro ao processar pagamento');
+
+      // Tratamento específico de erros do Asaas
+      if (responseData.errors && responseData.errors.length > 0) {
+        const asaasError = responseData.errors[0];
+        let errorMessage = asaasError.description || 'Erro ao processar pagamento';
+
+        // Traduzir mensagens comuns de erro
+        if (errorMessage.includes('card number is invalid')) {
+          errorMessage = 'Número do cartão inválido';
+        } else if (errorMessage.includes('card expired')) {
+          errorMessage = 'Cartão expirado';
+        } else if (errorMessage.includes('insufficient funds')) {
+          errorMessage = 'Saldo insuficiente';
+        } else if (errorMessage.includes('unauthorized')) {
+          errorMessage = 'Transação não autorizada. Verifique os dados do cartão de crédito e tente novamente.';
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      throw new Error('Erro ao processar pagamento. Por favor, tente novamente.');
     }
 
     console.log('Pagamento criado com sucesso:', {

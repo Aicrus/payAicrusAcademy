@@ -54,9 +54,24 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error('Erro ao processar pagamento:', error);
+    
+    let errorMessage = 'Erro ao processar pagamento';
+    let statusCode = 500;
+
+    if (error instanceof Error) {
+      // Verificar se é um erro do Asaas
+      if (error.message.includes('400') || error.message.includes('cartão')) {
+        statusCode = 400;
+        errorMessage = error.message;
+      } else if (error.message.includes('401') || error.message.includes('token')) {
+        statusCode = 401;
+        errorMessage = 'Erro de autenticação com a operadora de pagamento';
+      }
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Erro ao processar pagamento' },
-      { status: 500 }
+      { error: errorMessage },
+      { status: statusCode }
     );
   }
 } 

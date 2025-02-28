@@ -239,10 +239,16 @@ export async function createAsaasPayment(data: AsaasPaymentData): Promise<AsaasP
       access_token: headers.access_token ? '***' : undefined
     });
 
+    // Adicionar configuração para desativar notificações
+    const paymentData = {
+      ...data,
+      postalService: false
+    };
+
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(data)
+      body: JSON.stringify(paymentData)
     });
 
     const responseData = await response.json();
@@ -382,10 +388,16 @@ export async function createBoletoPayment(data: AsaasBoletoPaymentData): Promise
       access_token: headers.access_token ? '***' : undefined
     });
 
+    // Adicionar configuração para desativar notificações
+    const paymentData = {
+      ...data,
+      postalService: false
+    };
+
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(data)
+      body: JSON.stringify(paymentData)
     });
 
     const responseData = await response.json();

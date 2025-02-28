@@ -6,6 +6,7 @@ import { DocumentTextIcon, ClipboardDocumentIcon, CheckIcon, ArrowTopRightOnSqua
 import { motion } from 'framer-motion';
 import { useProduto } from '@/contexts/ProdutoContext';
 import { TransactionService } from '@/services/transaction';
+import type { TransactionData } from '@/services/transaction';
 
 interface BoletoPaymentResponse {
   paymentId: string;
@@ -96,7 +97,6 @@ export default function BoletoForm() {
           // Atualizar transação existente para boleto
           try {
             await TransactionService.updateTransaction(pendingTransaction.id, {
-              metodoPagamento: 'BOLETO',
               valor: produto.precoDesconto,
               produto: produto.id,
               metaData: {
@@ -110,7 +110,7 @@ export default function BoletoForm() {
             transaction = pendingTransaction;
             console.log('Transação atualizada para boleto');
           } catch (updateError) {
-            console.error('Erro ao atualizar transação:', updateError);
+            console.error('Erro ao atualizar valor da transação:', updateError);
             // Se falhar em atualizar, criar nova transação
             pendingTransaction = null;
           }
@@ -119,13 +119,13 @@ export default function BoletoForm() {
 
       // Se não encontrou transação pendente, cria uma nova
       if (!transaction) {
-        const transactionData = {
-          valor: produto.precoDesconto,
-          status: 'PENDING' as const,
-          metodoPagamento: 'BOLETO' as const,
+        const transactionData: TransactionData = {
+          amount: produto.precoDesconto,
+          status: 'PENDING',
+          paymentMethod: 'BOLETO',
+          userId: userData.id,
+          productId: produto.id,
           idCustomerAsaas: userInfo.asaasId,
-          users: Number(userData.id),
-          produto: produto.id,
           metaData: {
             email: userInfo.email,
             whatsapp: userInfo.whatsapp,
