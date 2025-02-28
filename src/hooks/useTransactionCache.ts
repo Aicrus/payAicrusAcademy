@@ -1,7 +1,15 @@
 import { useState, useEffect } from 'react';
-import type { Transaction } from '@/types/transaction';
 
 const TRANSACTION_CACHE_KEY = 'currentTransaction';
+
+interface TransactionMetaData {
+  email?: string;
+  whatsapp?: string;
+  produto?: {
+    preco: number;
+  };
+  parcelas?: number;
+}
 
 interface TransactionData {
   id: string;
@@ -11,36 +19,11 @@ interface TransactionData {
   status: string;
   paymentMethod: string;
   paymentId?: string;
+  metaData: TransactionMetaData;
 }
 
-export function useTransactionCache(userId: string | undefined) {
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-
-  useEffect(() => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchTransaction = async () => {
-      try {
-        const response = await fetch(`/api/transactions/pending/${userId}`);
-        if (!response.ok) {
-          throw new Error('Falha ao buscar transação');
-        }
-        const data = await response.json();
-        setTransaction(data);
-      } catch (err) {
-        setError(err instanceof Error ? err : new Error('Erro desconhecido'));
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTransaction();
-  }, [userId]);
+export function useTransactionCache() {
+  const [transaction, setTransaction] = useState<TransactionData | null>(null);
 
   // Carregar transação do cache ao montar o componente
   useEffect(() => {
@@ -87,8 +70,6 @@ export function useTransactionCache(userId: string | undefined) {
     saveTransaction,
     updateTransaction,
     clearTransaction,
-    hasPendingTransaction: !!transaction && transaction.status === 'PENDING',
-    loading,
-    error
+    hasPendingTransaction: !!transaction && transaction.status === 'PENDING'
   };
 } 

@@ -8,7 +8,7 @@ import { motion } from 'framer-motion';
 import { useProduto } from '@/contexts/ProdutoContext';
 import PaymentStatus from './PaymentStatus';
 import { TransactionService } from '@/services/transaction';
-import type { TransactionData } from '@/services/transaction';
+import type { TransactionData, Transaction } from '@/services/transaction';
 
 interface PixPaymentResponse {
   paymentId: string;
@@ -40,7 +40,7 @@ export default function PixForm() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [autoCheckInterval, setAutoCheckInterval] = useState<NodeJS.Timeout | null>(null);
-  const [currentTransaction, setCurrentTransaction] = useState<any>(null);
+  const [currentTransaction, setCurrentTransaction] = useState<Transaction | null>(null);
 
   useEffect(() => {
     return () => {
