@@ -20,6 +20,7 @@ import { TransactionService } from '@/services/transaction';
 import { formatarCPF, formatarTelefone, formatarCEP } from '@/utils/formatters';
 import { detectCardBrand, formatCardNumber, CardBrand } from '@/utils/cardUtils';
 import Image from 'next/image';
+import type { TransactionData } from '@/services/transaction';
 
 interface CreditCardFormData {
   holderName: string;
@@ -67,6 +68,21 @@ export default function CreditCardForm() {
     addressComplement: '',
     phone: ''
   });
+  const [showAdditionalFields, setShowAdditionalFields] = useState(false);
+
+  const checkCardFieldsComplete = () => {
+    return (
+      formData.holderName.trim() !== '' &&
+      formData.number.replace(/\D/g, '').length >= 13 &&
+      formData.expiryMonth !== '' &&
+      formData.expiryYear !== '' &&
+      formData.ccv.length === 3
+    );
+  };
+
+  useEffect(() => {
+    setShowAdditionalFields(checkCardFieldsComplete());
+  }, [formData.holderName, formData.number, formData.expiryMonth, formData.expiryYear, formData.ccv]);
 
   useEffect(() => {
     if (userInfo) {
@@ -98,7 +114,7 @@ export default function CreditCardForm() {
         formattedValue = formatarCEP(value);
         break;
       case 'ccv':
-        formattedValue = value.replace(/\D/g, '').substring(0, 4);
+        formattedValue = value.replace(/\D/g, '').substring(0, 3);
         break;
     }
 
@@ -161,22 +177,21 @@ export default function CreditCardForm() {
           // Atualizar transação existente para cartão
           try {
             await TransactionService.updateTransaction(pendingTransaction.id, {
-              metodoPagamento: 'CREDIT_CARD',
               valor: produto.precoDesconto,
               produto: produto.id,
+              paymentMethod: 'CREDIT_CARD',
               metaData: {
                 ...pendingTransaction.metaData,
                 produto: {
                   preco: produto.precoDesconto
-                },
-                parcelas: selectedInstallment
+                }
               }
             });
             
             transaction = pendingTransaction;
             console.log('Transação atualizada para cartão');
           } catch (updateError) {
-            console.error('Erro ao atualizar transação:', updateError);
+            console.error('Erro ao atualizar valor da transação:', updateError);
             // Se falhar em atualizar, criar nova transação
             pendingTransaction = null;
           }
@@ -185,13 +200,13 @@ export default function CreditCardForm() {
 
       // Se não encontrou transação pendente, cria uma nova
       if (!transaction) {
-        const transactionData = {
-          valor: produto.precoDesconto,
-          status: 'PENDING' as const,
-          metodoPagamento: 'CREDIT_CARD' as const,
+        const transactionData: TransactionData = {
+          amount: produto.precoDesconto,
+          status: 'PENDING',
+          paymentMethod: 'CREDIT_CARD',
+          userId: userData.id,
+          productId: produto.id,
           idCustomerAsaas: userInfo.asaasId,
-          users: Number(userData.id),
-          produto: produto.id,
           metaData: {
             email: userInfo.email,
             whatsapp: userInfo.whatsapp,
@@ -245,9 +260,41 @@ export default function CreditCardForm() {
       });
 
       if (!responseCreditCard.ok) {
-        const errorData = await responseCreditCard.json();
-        console.error('Erro na resposta da API Cartão:', errorData);
-        throw new Error(errorData.error || 'Falha ao processar pagamento');
+        const errorText = await responseCreditCard.text();
+        let errorMessage = 'Falha ao processar pagamento';
+        
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error) {
+            errorMessage = errorData.error;
+            
+            // Log detalhado do erro
+            console.error('Detalhes do erro:', {
+              message: errorData.error,
+              status: responseCreditCard.status,
+              statusText: responseCreditCard.statusText
+            });
+          }
+        } catch (e) {
+          console.error('Erro ao processar resposta de erro:', {
+            text: errorText,
+            parseError: e
+          });
+        }
+        
+        // Adicionar mensagem amigável para o usuário
+        let userMessage = errorMessage;
+        if (errorMessage.includes('não autorizada')) {
+          userMessage = 'Transação não autorizada. Por favor, verifique os dados do cartão e tente novamente. Se o problema persistir, entre em contato com seu banco.';
+        } else if (errorMessage.includes('cartão inválido')) {
+          userMessage = 'O número do cartão informado é inválido. Por favor, verifique e tente novamente.';
+        } else if (errorMessage.includes('expirado')) {
+          userMessage = 'O cartão está expirado. Por favor, use um cartão válido.';
+        } else if (errorMessage.includes('saldo insuficiente')) {
+          userMessage = 'Saldo insuficiente. Por favor, verifique com seu banco ou use outro cartão.';
+        }
+        
+        throw new Error(userMessage);
       }
 
       const data: CreditCardPaymentResponse = await responseCreditCard.json();
@@ -259,6 +306,16 @@ export default function CreditCardForm() {
         });
         
         console.log('ID do pagamento atualizado na transação:', data.paymentId);
+
+        // Se o pagamento foi confirmado, finaliza a transação
+        if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
+          try {
+            await TransactionService.finalizeTransaction(transaction.id);
+            console.log('Transação finalizada com sucesso');
+          } catch (error) {
+            console.error('Erro ao finalizar transação:', error);
+          }
+        }
       } catch (updateError) {
         console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
         // Não interromper o fluxo por erro na atualização
@@ -470,8 +527,8 @@ export default function CreditCardForm() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-8">
                 <label className="block text-sm font-medium text-gray-700 mb-3 px-1">
                   Data de Validade
                 </label>
@@ -486,7 +543,7 @@ export default function CreditCardForm() {
                         name="expiryMonth"
                         value={formData.expiryMonth}
                         onChange={handleInputChange}
-                        className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                        className="block w-full pl-10 pr-2 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
                         required
                       >
                         <option value="">MM</option>
@@ -509,7 +566,7 @@ export default function CreditCardForm() {
                         name="expiryYear"
                         value={formData.expiryYear}
                         onChange={handleInputChange}
-                        className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                        className="block w-full pl-10 pr-2 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
                         required
                       >
                         <option value="">AA</option>
@@ -527,7 +584,7 @@ export default function CreditCardForm() {
                 </div>
               </div>
 
-              <div>
+              <div className="col-span-4">
                 <label className="block text-sm font-medium text-gray-700 mb-3 px-1">
                   CVV
                   <button
@@ -549,119 +606,126 @@ export default function CreditCardForm() {
                     value={formData.ccv}
                     onChange={handleInputChange}
                     placeholder="123"
-                    className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                    className="block w-full pl-10 pr-2 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
                     required
-                    maxLength={4}
+                    maxLength={3}
                   />
                 </div>
               </div>
             </div>
 
-            <div>
-              <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-3 px-1">
-                CPF do titular
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <IdentificationIcon className="h-5 w-5 text-gray-400" />
+            {showAdditionalFields && (
+              <motion.div 
+                className="space-y-4"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div>
+                  <label htmlFor="cpf" className="block text-sm font-medium text-gray-700 mb-3 px-1">
+                    CPF do titular
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <IdentificationIcon className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      id="cpf"
+                      name="cpf"
+                      value={formData.cpf}
+                      onChange={handleInputChange}
+                      placeholder="000.000.000-00"
+                      className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                      required
+                    />
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  id="cpf"
-                  name="cpf"
-                  value={formData.cpf}
-                  onChange={handleInputChange}
-                  placeholder="000.000.000-00"
-                  className={`block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${userInfo?.cpf ? 'bg-gray-50' : ''}`}
-                  disabled={!!userInfo?.cpf}
-                  required
-                />
-              </div>
-            </div>
 
-            <div>
-              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-3 px-1">
-                Telefone do titular
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <PhoneIcon className="h-5 w-5 text-gray-400" />
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-3 px-1">
+                    Telefone do titular
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <PhoneIcon className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      id="phone"
+                      name="phone"
+                      value={formData.phone}
+                      onChange={handleInputChange}
+                      placeholder="(00) 00000-0000"
+                      className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                      required
+                    />
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  id="phone"
-                  name="phone"
-                  value={formData.phone}
-                  onChange={handleInputChange}
-                  placeholder="(00) 00000-0000"
-                  className={`block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] ${userInfo?.whatsapp ? 'bg-gray-50' : ''}`}
-                  disabled={!!userInfo?.whatsapp}
-                  required
-                />
-              </div>
-            </div>
 
-            <div>
-              <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 mb-3 px-1">
-                CEP
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <MapPinIcon className="h-5 w-5 text-gray-400" />
+                <div>
+                  <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 mb-3 px-1">
+                    CEP
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <MapPinIcon className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      id="postalCode"
+                      name="postalCode"
+                      value={formData.postalCode}
+                      onChange={handleInputChange}
+                      placeholder="00000-000"
+                      className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                      required
+                    />
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  id="postalCode"
-                  name="postalCode"
-                  value={formData.postalCode}
-                  onChange={handleInputChange}
-                  placeholder="00000-000"
-                  className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
-                  required
-                />
-              </div>
-            </div>
 
-            <div>
-              <label htmlFor="addressNumber" className="block text-sm font-medium text-gray-700 mb-3 px-1">
-                Número
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <BuildingOfficeIcon className="h-5 w-5 text-gray-400" />
+                <div>
+                  <label htmlFor="addressNumber" className="block text-sm font-medium text-gray-700 mb-3 px-1">
+                    Número
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <BuildingOfficeIcon className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      id="addressNumber"
+                      name="addressNumber"
+                      value={formData.addressNumber}
+                      onChange={handleInputChange}
+                      placeholder="123"
+                      className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                      required
+                    />
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  id="addressNumber"
-                  name="addressNumber"
-                  value={formData.addressNumber}
-                  onChange={handleInputChange}
-                  placeholder="123"
-                  className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
-                  required
-                />
-              </div>
-            </div>
 
-            <div>
-              <label htmlFor="addressComplement" className="block text-sm font-medium text-gray-700 mb-3 px-1">
-                Complemento (opcional)
-              </label>
-              <div className="mt-1 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <BuildingOfficeIcon className="h-5 w-5 text-gray-400" />
+                <div>
+                  <label htmlFor="addressComplement" className="block text-sm font-medium text-gray-700 mb-3 px-1">
+                    Complemento (opcional)
+                  </label>
+                  <div className="mt-1 relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <BuildingOfficeIcon className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      id="addressComplement"
+                      name="addressComplement"
+                      value={formData.addressComplement}
+                      onChange={handleInputChange}
+                      placeholder="Apto, Sala, etc."
+                      className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+                    />
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  id="addressComplement"
-                  name="addressComplement"
-                  value={formData.addressComplement}
-                  onChange={handleInputChange}
-                  placeholder="Apto, Sala, etc."
-                  className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
-                />
-              </div>
-            </div>
+              </motion.div>
+            )}
           </div>
 
           <button
