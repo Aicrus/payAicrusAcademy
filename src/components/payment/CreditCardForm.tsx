@@ -260,36 +260,47 @@ export default function CreditCardForm() {
       }
 
       try {
+        const paymentData = {
+          customerId: userInfo.asaasId,
+          description: `Assinatura Aicrus Academy - ${userInfo.email}`,
+          value: parcelaInfo.valorTotal,
+          creditCard: {
+            holderName: formData.holderName,
+            number: cardNumber,
+            expiryMonth: formData.expiryMonth,
+            expiryYear: formData.expiryYear,
+            ccv: formData.ccv
+          },
+          creditCardHolderInfo: {
+            name: formData.holderName,
+            email: userInfo.email,
+            cpfCnpj: formData.cpf.replace(/\D/g, ''),
+            postalCode: formData.postalCode.replace(/\D/g, ''),
+            addressNumber: formData.addressNumber,
+            addressComplement: formData.addressComplement || undefined,
+            phone: formData.phone.replace(/\D/g, ''),
+            mobilePhone: formData.phone.replace(/\D/g, '')
+          },
+          installmentCount: selectedInstallment,
+          installmentValue: parcelaInfo.valorParcela,
+          transactionId: transaction.id
+        };
+
+        console.log('Dados do pagamento:', {
+          ...paymentData,
+          creditCard: {
+            ...paymentData.creditCard,
+            number: '****' + paymentData.creditCard.number.slice(-4),
+            ccv: '***'
+          }
+        });
+
         const responseCreditCard = await fetch('/api/asaas/credit-card', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            customerId: userInfo.asaasId,
-            description: `Assinatura Aicrus Academy - ${userInfo.email}`,
-            value: parcelaInfo.valorTotal,
-            creditCard: {
-              holderName: formData.holderName,
-              number: cardNumber,
-              expiryMonth: formData.expiryMonth,
-              expiryYear: formData.expiryYear,
-              ccv: formData.ccv
-            },
-            creditCardHolderInfo: {
-              name: formData.holderName,
-              email: userInfo.email,
-              cpfCnpj: formData.cpf.replace(/\D/g, ''),
-              postalCode: formData.postalCode.replace(/\D/g, ''),
-              addressNumber: formData.addressNumber,
-              addressComplement: formData.addressComplement || undefined,
-              phone: formData.phone.replace(/\D/g, ''),
-              mobilePhone: formData.phone.replace(/\D/g, '')
-            },
-            installmentCount: selectedInstallment,
-            installmentValue: parcelaInfo.valorParcela,
-            transactionId: transaction.id
-          })
+          body: JSON.stringify(paymentData)
         });
 
         if (!responseCreditCard.ok) {
@@ -298,7 +309,15 @@ export default function CreditCardForm() {
             status: responseCreditCard.status,
             statusText: responseCreditCard.statusText,
             responseBody: errorData,
-            rawError: JSON.stringify(errorData)
+            rawError: JSON.stringify(errorData),
+            requestData: {
+              ...paymentData,
+              creditCard: {
+                ...paymentData.creditCard,
+                number: '****' + paymentData.creditCard.number.slice(-4),
+                ccv: '***'
+              }
+            }
           });
 
           let errorMessage = 'Erro ao processar pagamento';
