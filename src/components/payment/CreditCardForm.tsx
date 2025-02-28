@@ -82,7 +82,7 @@ export default function CreditCardForm() {
 
   useEffect(() => {
     setShowAdditionalFields(checkCardFieldsComplete());
-  }, [formData.holderName, formData.number, formData.expiryMonth, formData.expiryYear, formData.ccv]);
+  }, [formData.holderName, formData.number, formData.expiryMonth, formData.expiryYear, formData.ccv, checkCardFieldsComplete]);
 
   useEffect(() => {
     if (userInfo) {

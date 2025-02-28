@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { useProduto } from '@/contexts/ProdutoContext';
 import PaymentStatus from './PaymentStatus';
 import { TransactionService } from '@/services/transaction';
+import type { TransactionData } from '@/services/transaction';
 
 interface PixPaymentResponse {
   paymentId: string;
@@ -35,12 +36,13 @@ export default function PixForm() {
   const [isCopied, setIsCopied] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [pixData, setPixData] = useState<PixPaymentResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pixData, setPixData] = useState<PixPaymentResponse | null>(null);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
-  const [autoCheckInterval, setAutoCheckInterval] = useState<NodeJS.Timeout | null>(null);
-  const [checkCount, setCheckCount] = useState(0);
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [currentTransaction, setCurrentTransaction] = useState<any>(null);
   const MAX_CHECK_COUNT = 60; // 5 minutos (5 * 60 segundos / 5 segundos por verificação)
 
   useEffect(() => {
@@ -51,85 +53,94 @@ export default function PixForm() {
     };
   }, [autoCheckInterval]);
 
-  const checkPaymentStatus = async (paymentId: string) => {
-    try {
-      setIsVerifying(true);
-      const response = await fetch(`/api/asaas/payments/${paymentId}/status`);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao verificar status');
-      }
-
-      setPaymentStatus(data);
-
-      // Atualizar status na transação
-      const transaction = TransactionService.getFromCache();
-      if (transaction && transaction.id) {
+  useEffect(() => {
+    if (pixData?.paymentId && currentTransaction?.id) {
+      const checkInterval = setInterval(async () => {
         try {
-          await TransactionService.updateTransaction(transaction.id, {
-            status: data.status
-          });
+          const response = await fetch(`/api/asaas/payments/${pixData.paymentId}/status`);
+          const data = await response.json();
+          
+          if (data.status) {
+            setPaymentStatus(prevStatus => ({
+              ...prevStatus!,
+              status: data.status,
+              confirmedDate: data.confirmedDate,
+              paymentDate: data.paymentDate
+            }));
 
-          // Se confirmado, finaliza a transação
-          if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
-            await TransactionService.finalizeTransaction(transaction.id);
-            if (autoCheckInterval) {
-              clearInterval(autoCheckInterval);
-              setAutoCheckInterval(null);
+            // Se o pagamento foi confirmado, finaliza a transação
+            if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
+              try {
+                await TransactionService.finalizeTransaction(currentTransaction.id);
+                console.log('Transação finalizada com sucesso');
+              } catch (error) {
+                console.error('Erro ao finalizar transação:', error);
+              }
+              clearInterval(checkInterval);
             }
           }
-        } catch (updateError) {
-          console.error('Erro ao atualizar transação:', updateError);
-          // Não propagar erro de atualização da transação
+        } catch (error) {
+          console.error('Erro ao verificar status do pagamento:', error);
         }
-      } else {
-        console.log('Nenhuma transação encontrada no cache para atualizar');
-      }
-    } catch (err) {
-      console.error('Erro ao verificar status:', err);
-    } finally {
-      setIsVerifying(false);
-    }
-  };
+      }, 5000); // Verifica a cada 5 segundos
 
-  const startAutoCheck = (paymentId: string) => {
-    // Limpa intervalo anterior se existir
-    if (autoCheckInterval) {
-      clearInterval(autoCheckInterval);
+      return () => clearInterval(checkInterval);
     }
+  }, [pixData?.paymentId, currentTransaction]);
 
-    setCheckCount(0);
+  const checkPaymentStatus = async () => {
+    if (!currentTransaction?.idPayAsaas) return;
     
-    // Primeira verificação após 45 segundos
-    setTimeout(() => {
-      checkPaymentStatus(paymentId);
-    }, 45000);
-
-    // Configura verificação automática a cada 20 segundos
-    const interval = setInterval(() => {
-      setCheckCount(count => {
-        const newCount = count + 1;
-        
-        // Se atingiu o limite (2 minutos), para de verificar
-        // 6 verificações = 2 minutos (20 segundos * 6)
-        if (newCount >= 6) {
-          clearInterval(interval);
-          setAutoCheckInterval(null);
-          return newCount;
-        }
-
-        checkPaymentStatus(paymentId);
-        return newCount;
-      });
-    }, 20000); // 20 segundos
-
-    setAutoCheckInterval(interval);
+    try {
+      const response = await fetch(`/api/asaas/payment-status/${currentTransaction.idPayAsaas}`);
+      if (!response.ok) throw new Error('Falha ao verificar status do pagamento');
+      
+      const data = await response.json();
+      setPaymentStatus(prevStatus => ({
+        ...prevStatus!,
+        status: data.status,
+        confirmedDate: data.confirmedDate,
+        paymentDate: data.paymentDate
+      }));
+      
+      if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
+        setShowConfirmation(true);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Erro ao verificar status:', error);
+      return false;
+    }
   };
+
+  const startAutoCheck = () => {
+    if (isVerifying) return;
+    setIsVerifying(true);
+
+    const interval = setInterval(async () => {
+      const isConfirmed = await checkPaymentStatus();
+      if (isConfirmed) {
+        clearInterval(interval);
+        setIsVerifying(false);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(interval);
+      setIsVerifying(false);
+    };
+  };
+
+  useEffect(() => {
+    if (qrCodeUrl) {
+      startAutoCheck();
+    }
+  }, [qrCodeUrl]);
 
   const handleManualCheck = () => {
     if (pixData?.paymentId) {
-      checkPaymentStatus(pixData.paymentId);
+      checkPaymentStatus();
     }
   };
 
@@ -257,48 +268,38 @@ export default function PixForm() {
         if (pendingTransaction && pendingTransaction.id) {
           console.log('Transação pendente encontrada:', pendingTransaction);
           
-          // Verificar se o valor mudou
-          if (pendingTransaction.valor !== produto.precoDesconto) {
-            console.log('Valor do produto mudou, atualizando transação:', {
-              valorAntigo: pendingTransaction.valor,
-              valorNovo: produto.precoDesconto
+          // Atualizar transação existente para PIX
+          try {
+            await TransactionService.updateTransaction(pendingTransaction.id, {
+              valor: produto.precoDesconto,
+              produto: produto.id,
+              paymentMethod: 'PIX', // Adicionar atualização do método de pagamento
+              metaData: {
+                ...pendingTransaction.metaData,
+                produto: {
+                  preco: produto.precoDesconto
+                }
+              }
             });
             
-            // Atualizar transação com novo valor
-            try {
-              await TransactionService.updateTransaction(pendingTransaction.id, {
-                valor: produto.precoDesconto,
-                produto: produto.id,
-                metaData: {
-                  ...pendingTransaction.metaData,
-                  produto: {
-                    preco: produto.precoDesconto
-                  }
-                }
-              });
-              
-              // Atualizar objeto da transação com novo valor
-              pendingTransaction.valor = produto.precoDesconto;
-              pendingTransaction.metaData.produto.preco = produto.precoDesconto;
-              
-              console.log('Transação atualizada com novo valor');
-            } catch (updateError) {
-              console.error('Erro ao atualizar valor da transação:', updateError);
-              // Se falhar em atualizar, criar nova transação
-              pendingTransaction = null;
-            }
+            transaction = pendingTransaction;
+            console.log('Transação atualizada para PIX');
+          } catch (updateError) {
+            console.error('Erro ao atualizar valor da transação:', updateError);
+            // Se falhar em atualizar, criar nova transação
+            pendingTransaction = null;
           }
-          
-          transaction = pendingTransaction;
         }
       }
 
       // Se não encontrou transação pendente, cria uma nova
       if (!transaction) {
-        const transactionData = {
-          valor: produto.precoDesconto,
-          status: 'PENDING' as const,
-          metodoPagamento: 'PIX' as const,
+        const transactionData: TransactionData = {
+          amount: produto.precoDesconto,
+          status: 'PENDING',
+          paymentMethod: 'PIX',
+          userId: userData.id,
+          productId: produto.id,
           idCustomerAsaas: userInfo.asaasId,
           users: Number(userData.id),
           produto: produto.id,
@@ -326,6 +327,8 @@ export default function PixForm() {
         });
       }
         
+      setCurrentTransaction(transaction);
+
       const responsePix = await fetch('/api/asaas/pix', {
         method: 'POST',
         headers: {
@@ -371,7 +374,7 @@ export default function PixForm() {
         confirmedDate: null,
         paymentDate: null
       });
-      startAutoCheck(data.paymentId);
+      setQrCodeUrl(data.encodedImage);
     } catch (err) {
       console.error('Erro completo ao gerar PIX:', err);
       setError(

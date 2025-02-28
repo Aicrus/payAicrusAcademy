@@ -1,34 +1,35 @@
 import { supabase } from '@/lib/supabase';
+import type { Transaction } from '@/types/transaction';
 
-interface Transaction {
-  id: number;
-  created_at: string;
-  valor: number;
-  status: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH';
-  dataHora: string;
-  metodoPagamento: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
+interface TransactionData {
+  amount: number;
+  status: string;
+  paymentMethod: string;
+  userId: string;
+  productId: string;
   idCustomerAsaas: string;
-  idPayAsaas: string;
-  users: number;
-  produto: number; // ID do produto na tabela produtosAicrusAcademy
-  metaData: Record<string, any>;
+  metaData: {
+    email: string;
+    whatsapp: string;
+    produto: {
+      preco: number;
+    };
+    parcelas?: number;
+  };
+}
+
+interface TransactionUpdateData {
+  valor?: number;
+  produto?: string;
+  paymentMethod?: string;
+  idPayAsaas?: string;
+  metaData?: Record<string, unknown>;
 }
 
 const TRANSACTION_CACHE_KEY = 'currentTransaction';
 
-interface TransactionData {
-  valor: number;
-  status: 'PENDING' | 'PAID' | 'FAILED' | 'CANCELLED';
-  metodoPagamento: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
-  idCustomerAsaas: string;
-  users: number;
-  produto: number; // ID do produto na tabela produtosAicrusAcademy
-  metaData?: Record<string, any>;
-  idPayAsaas?: string;
-}
-
 export class TransactionService {
-  static async createTransaction(data: TransactionData) {
+  static async createTransaction(data: TransactionData): Promise<Transaction> {
     try {
       const response = await fetch('/api/transactions', {
         method: 'POST',
@@ -39,21 +40,20 @@ export class TransactionService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao criar transação');
+        throw new Error('Falha ao criar transação');
       }
 
-      return await response.json();
+      return response.json();
     } catch (error) {
       console.error('Erro ao criar transação:', error);
       throw error;
     }
   }
 
-  static async updateTransaction(id: number, data: Partial<TransactionData>) {
+  static async updateTransaction(id: string, data: TransactionUpdateData): Promise<Transaction> {
     try {
       const response = await fetch(`/api/transactions/${id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -61,11 +61,10 @@ export class TransactionService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao atualizar transação');
+        throw new Error('Falha ao atualizar transação');
       }
 
-      return await response.json();
+      return response.json();
     } catch (error) {
       console.error('Erro ao atualizar transação:', error);
       throw error;
@@ -114,87 +113,17 @@ export class TransactionService {
     }
   }
 
-  static async finalizeTransaction(id: number) {
+  static async finalizeTransaction(id: string): Promise<Transaction> {
     try {
-      // Primeiro, buscar os dados da transação
-      const { data: transaction, error: fetchError } = await supabase
-        .from('transacoes')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchError) {
-        throw new Error(`Erro ao buscar transação: ${fetchError.message}`);
-      }
-
-      // Verificar se já existe uma compra ativa para este usuário e produto
-      const { data: existingPurchase, error: purchaseError } = await supabase
-        .from('comprasUser')
-        .select('*')
-        .eq('users', transaction.users)
-        .eq('produto', transaction.produto)
-        .eq('statusAcesso', 'ativo')
-        .single();
-
-      const dataInicio = new Date();
-      // Definir data de fim como 1 ano após o início
-      const dataFim = new Date(dataInicio);
-      dataFim.setFullYear(dataFim.getFullYear() + 1);
-
-      if (existingPurchase) {
-        // Atualizar a data de fim da compra existente
-        const { error: updateError } = await supabase
-          .from('comprasUser')
-          .update({
-            dataFim: dataFim.toISOString(),
-            transacao: id,
-            ultimaAtualizacao: new Date().toISOString()
-          })
-          .eq('id', existingPurchase.id);
-
-        if (updateError) {
-          throw new Error(`Erro ao atualizar compra: ${updateError.message}`);
-        }
-      } else {
-        // Criar nova compra
-        const { error: insertError } = await supabase
-          .from('comprasUser')
-          .insert({
-            users: transaction.users,
-            produto: transaction.produto,
-            transacao: id,
-            dataInicio: dataInicio.toISOString(),
-            dataFim: dataFim.toISOString(),
-            statusAcesso: 'ativo',
-            ultimaAtualizacao: new Date().toISOString()
-          });
-
-        if (insertError) {
-          throw new Error(`Erro ao criar compra: ${insertError.message}`);
-        }
-      }
-
-      // Atualizar status da transação
-      const response = await fetch(`/api/transactions/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: 'CONFIRMED',
-          dataHora: new Date().toISOString()
-        }),
+      const response = await fetch(`/api/transactions/${id}/finalize`, {
+        method: 'POST',
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erro ao finalizar transação');
+        throw new Error('Falha ao finalizar transação');
       }
 
-      // Limpar cache após finalizar
-      localStorage.removeItem(TRANSACTION_CACHE_KEY);
-
-      return await response.json();
+      return response.json();
     } catch (error) {
       console.error('Erro ao finalizar transação:', error);
       throw error;
