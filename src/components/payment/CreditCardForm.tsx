@@ -228,39 +228,69 @@ export default function CreditCardForm() {
 
       const parcelaInfo = parcelas[selectedInstallment - 1];
       
-      const responseCreditCard = await fetch('/api/asaas/credit-card', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          customerId: userInfo.asaasId,
-          description: `Assinatura Aicrus Academy - ${userInfo.email}`,
-          value: parcelaInfo.valorTotal,
-          creditCard: {
-            holderName: formData.holderName,
-            number: formData.number.replace(/\D/g, ''),
-            expiryMonth: formData.expiryMonth,
-            expiryYear: formData.expiryYear,
-            ccv: formData.ccv
-          },
-          creditCardHolderInfo: {
-            name: formData.holderName,
-            email: userInfo.email,
-            cpfCnpj: formData.cpf.replace(/\D/g, ''),
-            postalCode: formData.postalCode.replace(/\D/g, ''),
-            addressNumber: formData.addressNumber,
-            addressComplement: formData.addressComplement || undefined,
-            phone: formData.phone.replace(/\D/g, '')
-          },
-          installmentCount: selectedInstallment,
-          transactionId: transaction.id
-        })
-      });
+      // Validações adicionais antes de enviar
+      const cardNumber = formData.number.replace(/\D/g, '');
+      if (cardNumber.length < 13 || cardNumber.length > 16) {
+        setError('Número do cartão inválido. Por favor, verifique.');
+        setLoading(false);
+        return;
+      }
 
-      if (!responseCreditCard.ok) {
-        let errorMessage = 'Erro ao processar pagamento';
-        try {
+      if (formData.ccv.length < 3) {
+        setError('Código de segurança (CVV) inválido. Por favor, verifique.');
+        setLoading(false);
+        return;
+      }
+
+      if (formData.cpf.replace(/\D/g, '').length !== 11) {
+        setError('CPF inválido. Por favor, verifique.');
+        setLoading(false);
+        return;
+      }
+
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1;
+      const expiryYear = parseInt(formData.expiryYear);
+      const expiryMonth = parseInt(formData.expiryMonth);
+
+      if (expiryYear < currentYear || (expiryYear === currentYear && expiryMonth < currentMonth)) {
+        setError('Cartão expirado. Por favor, use um cartão válido.');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const responseCreditCard = await fetch('/api/asaas/credit-card', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            customerId: userInfo.asaasId,
+            description: `Assinatura Aicrus Academy - ${userInfo.email}`,
+            value: parcelaInfo.valorTotal,
+            creditCard: {
+              holderName: formData.holderName,
+              number: cardNumber,
+              expiryMonth: formData.expiryMonth,
+              expiryYear: formData.expiryYear,
+              ccv: formData.ccv
+            },
+            creditCardHolderInfo: {
+              name: formData.holderName,
+              email: userInfo.email,
+              cpfCnpj: formData.cpf.replace(/\D/g, ''),
+              postalCode: formData.postalCode.replace(/\D/g, ''),
+              addressNumber: formData.addressNumber,
+              addressComplement: formData.addressComplement || undefined,
+              phone: formData.phone.replace(/\D/g, '')
+            },
+            installmentCount: selectedInstallment,
+            transactionId: transaction.id
+          })
+        });
+
+        if (!responseCreditCard.ok) {
           const errorData = await responseCreditCard.json();
           console.error('Detalhes do erro:', {
             message: errorData.errors?.[0]?.description || errorData.error,
@@ -269,56 +299,67 @@ export default function CreditCardForm() {
             errors: errorData.errors
           });
 
-          // Mensagens de erro mais específicas
+          let errorMessage = 'Erro ao processar pagamento';
+
           if (errorData.errors?.[0]?.description) {
-            errorMessage = errorData.errors[0].description;
-          } else if (errorData.error?.includes('não autorizada')) {
-            errorMessage = 'Transação não autorizada. Por favor, verifique os dados do cartão e tente novamente.';
-          } else if (errorData.error?.includes('cartão inválido')) {
-            errorMessage = 'Número do cartão inválido. Por favor, verifique e tente novamente.';
-          } else if (errorData.error?.includes('expirado')) {
-            errorMessage = 'Cartão expirado. Por favor, use um cartão válido.';
-          } else if (errorData.error?.includes('CVV')) {
-            errorMessage = 'Código de segurança (CVV) inválido. Por favor, verifique e tente novamente.';
-          } else if (errorData.error?.includes('limite')) {
-            errorMessage = 'Limite do cartão insuficiente. Por favor, use outro cartão ou entre em contato com seu banco.';
+            const description = errorData.errors[0].description.toLowerCase();
+            
+            if (description.includes('não autorizada') || description.includes('não autorizado')) {
+              errorMessage = 'Transação não autorizada. Verifique os dados do cartão ou entre em contato com seu banco.';
+            } else if (description.includes('cartão inválido') || description.includes('número do cartão')) {
+              errorMessage = 'Número do cartão inválido. Por favor, verifique os números digitados.';
+            } else if (description.includes('expirado') || description.includes('expiração')) {
+              errorMessage = 'Cartão expirado ou data de validade incorreta. Por favor, verifique.';
+            } else if (description.includes('cvv') || description.includes('código de segurança')) {
+              errorMessage = 'Código de segurança (CVV) inválido. Verifique o código no verso do cartão.';
+            } else if (description.includes('limite') || description.includes('saldo')) {
+              errorMessage = 'Limite indisponível. Por favor, use outro cartão ou entre em contato com seu banco.';
+            } else {
+              errorMessage = description.charAt(0).toUpperCase() + description.slice(1);
+            }
           }
 
           setError(errorMessage);
-        } catch (jsonError) {
-          console.error('Erro ao processar resposta de erro:', jsonError);
-          setError('Erro ao processar pagamento. Por favor, tente novamente.');
+          setLoading(false);
+          return;
         }
-        setLoading(false);
-        return;
-      }
 
-      const data: CreditCardPaymentResponse = await responseCreditCard.json();
+        const data: CreditCardPaymentResponse = await responseCreditCard.json();
 
-      // Atualizar transação com ID do pagamento
-      try {
-        await TransactionService.updateTransaction(transaction.id, {
-          idPayAsaas: data.paymentId
-        });
-        
-        console.log('ID do pagamento atualizado na transação:', data.paymentId);
+        // Atualizar transação com ID do pagamento
+        try {
+          await TransactionService.updateTransaction(transaction.id, {
+            idPayAsaas: data.paymentId
+          });
+          
+          console.log('ID do pagamento atualizado na transação:', data.paymentId);
 
-        // Se o pagamento foi confirmado, finaliza a transação
-        if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
-          try {
-            await TransactionService.finalizeTransaction(transaction.id);
-            console.log('Transação finalizada com sucesso');
-          } catch (error) {
-            console.error('Erro ao finalizar transação:', error);
+          // Se o pagamento foi confirmado, finaliza a transação
+          if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
+            try {
+              await TransactionService.finalizeTransaction(transaction.id);
+              console.log('Transação finalizada com sucesso');
+            } catch (error) {
+              console.error('Erro ao finalizar transação:', error);
+            }
           }
+        } catch (updateError) {
+          console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
+          // Não interromper o fluxo por erro na atualização
         }
-      } catch (updateError) {
-        console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
-        // Não interromper o fluxo por erro na atualização
-      }
 
-      // Redirecionar para URL de sucesso
-      window.location.href = process.env.NEXT_PUBLIC_SUCCESS_URL || 'https://www.aicrustech.com/';
+        // Redirecionar para URL de sucesso
+        window.location.href = process.env.NEXT_PUBLIC_SUCCESS_URL || 'https://www.aicrustech.com/';
+      } catch (err) {
+        console.error('Erro completo ao processar pagamento:', err);
+        setError(
+          err instanceof Error 
+            ? err.message 
+            : 'Erro ao processar pagamento. Por favor, tente novamente.'
+        );
+      } finally {
+        setLoading(false);
+      }
     } catch (err) {
       console.error('Erro completo ao processar pagamento:', err);
       setError(
@@ -326,8 +367,6 @@ export default function CreditCardForm() {
           ? err.message 
           : 'Erro ao processar pagamento. Por favor, tente novamente.'
       );
-    } finally {
-      setLoading(false);
     }
   };
 
