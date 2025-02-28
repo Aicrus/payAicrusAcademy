@@ -263,14 +263,16 @@ export default function CreditCardForm() {
         try {
           const errorData = await responseCreditCard.json();
           console.error('Detalhes do erro:', {
-            message: errorData.error,
+            message: errorData.errors?.[0]?.description || errorData.error,
             status: responseCreditCard.status,
             statusText: responseCreditCard.statusText,
-            data: errorData
+            errors: errorData.errors
           });
 
           // Mensagens de erro mais específicas
-          if (errorData.error?.includes('não autorizada')) {
+          if (errorData.errors?.[0]?.description) {
+            errorMessage = errorData.errors[0].description;
+          } else if (errorData.error?.includes('não autorizada')) {
             errorMessage = 'Transação não autorizada. Por favor, verifique os dados do cartão e tente novamente.';
           } else if (errorData.error?.includes('cartão inválido')) {
             errorMessage = 'Número do cartão inválido. Por favor, verifique e tente novamente.';
@@ -285,8 +287,9 @@ export default function CreditCardForm() {
           setError(errorMessage);
         } catch (jsonError) {
           console.error('Erro ao processar resposta de erro:', jsonError);
-          setError(errorMessage);
+          setError('Erro ao processar pagamento. Por favor, tente novamente.');
         }
+        setLoading(false);
         return;
       }
 
