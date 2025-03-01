@@ -9,6 +9,7 @@ import { useProduto } from '@/contexts/ProdutoContext';
 import PaymentStatus from './PaymentStatus';
 import { TransactionService } from '@/services/transaction';
 import type { TransactionData, Transaction } from '@/services/transaction';
+import { safeLog } from '@/utils/logger';
 
 interface PixPaymentResponse {
   paymentId: string;
@@ -68,7 +69,7 @@ export default function PixForm() {
             if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
               try {
                 await TransactionService.finalizeTransaction(currentTransaction.id);
-                console.log('Transação finalizada com sucesso');
+                safeLog('Transação finalizada com sucesso');
               } catch (error) {
                 console.error('Erro ao finalizar transação:', error);
               }
@@ -170,7 +171,7 @@ export default function PixForm() {
     setError(null);
 
     try {
-      console.log('Iniciando geração de PIX com dados:', {
+      safeLog('Iniciando geração de PIX com dados', {
         email: userInfo.email,
         asaasId: userInfo.asaasId,
         valor: produto.precoDesconto
@@ -187,7 +188,7 @@ export default function PixForm() {
         throw new Error('Usuário não encontrado no sistema');
       }
 
-      console.log('Usuário encontrado:', {
+      safeLog('Usuário encontrado', {
         id: userData.id,
         email: userData.email,
         idCustomerAsaas: userData.idCustomerAsaas
@@ -199,7 +200,7 @@ export default function PixForm() {
       if (response2.ok) {
         let pendingTransaction = await response2.json();
         if (pendingTransaction && pendingTransaction.id) {
-          console.log('Transação pendente encontrada:', pendingTransaction);
+          safeLog('Transação pendente encontrada', pendingTransaction);
           
           try {
             await TransactionService.updateTransaction(pendingTransaction.id, {
@@ -215,7 +216,7 @@ export default function PixForm() {
             });
             
             transaction = pendingTransaction;
-            console.log('Transação atualizada para PIX');
+            safeLog('Transação atualizada para PIX');
           } catch (updateError) {
             console.error('Erro ao atualizar valor da transação:', updateError);
             pendingTransaction = null;
@@ -242,7 +243,7 @@ export default function PixForm() {
           }
         };
 
-        console.log('Criando nova transação com dados:', transactionData);
+        safeLog('Criando nova transação com dados', transactionData);
         
         transaction = await TransactionService.createTransaction(transactionData);
         
@@ -250,7 +251,7 @@ export default function PixForm() {
           throw new Error('Falha ao criar transação: ID não retornado');
         }
 
-        console.log('Nova transação criada com sucesso:', {
+        safeLog('Nova transação criada com sucesso', {
           id: transaction.id,
           status: transaction.status,
           users: transaction.users
@@ -285,7 +286,7 @@ export default function PixForm() {
           idPayAsaas: data.paymentId
         });
         
-        console.log('ID do pagamento atualizado na transação:', data.paymentId);
+        safeLog('ID do pagamento atualizado na transação', { paymentId: data.paymentId });
       } catch (updateError) {
         console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
       }

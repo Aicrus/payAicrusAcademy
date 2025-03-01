@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateCustomer, deleteCustomer, type CustomerData } from '@/services/asaas/customer';
 import { supabase } from '@/lib/supabase';
+import { safeLog } from '@/utils/logger';
 
 export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const data: CustomerData = await request.json();
 
     // Atualizar cliente no Asaas
@@ -47,11 +48,11 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Excluir cliente no Asaas
     await deleteCustomer(id);
@@ -85,11 +86,11 @@ export async function DELETE(
 }
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const asaasId = params.id;
+    const asaasId = (await params).id;
 
     if (!asaasId) {
       return NextResponse.json(
@@ -98,7 +99,7 @@ export async function GET(
       );
     }
 
-    console.log('Buscando usuário com asaasId:', asaasId);
+    safeLog('Buscando usuário com asaasId', { asaasId });
 
     // Buscar usuário no Supabase
     const { data: user, error } = await supabase
@@ -127,7 +128,7 @@ export async function GET(
       );
     }
 
-    console.log('Usuário encontrado:', {
+    safeLog('Usuário encontrado', {
       id: user.id,
       email: user.email,
       idCustomerAsaas: user.idCustomerAsaas

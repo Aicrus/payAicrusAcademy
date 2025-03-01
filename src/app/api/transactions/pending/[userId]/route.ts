@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { safeLog } from '@/utils/logger';
 
 export async function GET(
   request: Request,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const userId = params.userId;
+    const { userId } = await params;
 
     if (!userId) {
       return NextResponse.json(
@@ -15,7 +16,7 @@ export async function GET(
       );
     }
 
-    console.log('Buscando transação pendente para usuário:', userId);
+    safeLog('Buscando transação pendente para usuário', { userId });
 
     // Buscar transação pendente no Supabase
     const { data: transaction, error } = await supabase
@@ -48,7 +49,7 @@ export async function GET(
       return NextResponse.json(null);
     }
 
-    console.log('Transação pendente encontrada:', {
+    safeLog('Transação pendente encontrada', {
       id: transaction.id,
       status: transaction.status,
       users: transaction.users

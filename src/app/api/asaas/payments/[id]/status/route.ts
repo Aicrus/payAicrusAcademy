@@ -3,12 +3,13 @@ import { checkPaymentStatus } from '@/services/asaas/payment';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('Verificando status do pagamento:', params.id);
+    const { id } = await params;
+    console.log('Verificando status do pagamento:', id);
 
-    const status = await checkPaymentStatus(params.id);
+    const status = await checkPaymentStatus(id);
 
     return NextResponse.json(status);
   } catch (error) {
