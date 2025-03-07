@@ -2,12 +2,18 @@ import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { safeLog } from '@/utils/logger';
 
+type RouteParams = {
+  params: {
+    userId: string;
+  };
+};
+
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ userId: string }> }
+  context: RouteParams
 ) {
   try {
-    const { userId } = await params;
+    const { userId } = context.params;
 
     if (!userId) {
       return NextResponse.json(

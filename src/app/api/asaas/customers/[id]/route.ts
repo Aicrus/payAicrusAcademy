@@ -3,12 +3,18 @@ import { updateCustomer, deleteCustomer, type CustomerData } from '@/services/as
 import { supabase } from '@/lib/supabase';
 import { safeLog } from '@/utils/logger';
 
+type RouteParams = {
+  params: {
+    id: string;
+  };
+};
+
 export async function PUT(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  context: RouteParams
 ) {
   try {
-    const { id } = await params;
+    const { id } = context.params;
     const data: CustomerData = await request.json();
 
     // Atualizar cliente no Asaas
@@ -49,10 +55,10 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  context: RouteParams
 ) {
   try {
-    const { id } = await params;
+    const { id } = context.params;
 
     // Excluir cliente no Asaas
     await deleteCustomer(id);
@@ -87,10 +93,10 @@ export async function DELETE(
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  context: RouteParams
 ) {
   try {
-    const asaasId = (await params).id;
+    const asaasId = context.params.id;
 
     if (!asaasId) {
       return NextResponse.json(
