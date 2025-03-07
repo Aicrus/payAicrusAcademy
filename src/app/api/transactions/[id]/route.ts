@@ -3,10 +3,10 @@ import { supabase } from '@/lib/supabase';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id: paramId } = params;
+    const { id: paramId } = await params;
     const id = Number(paramId);
 
     console.log('Consultando transação:', { id });
@@ -53,11 +53,11 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const data = await request.json();
-    const { id: paramId } = params;
+    const { id: paramId } = await params;
     const id = Number(paramId);
 
     console.log('Dados recebidos para atualização:', { id, data });

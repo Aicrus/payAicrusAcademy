@@ -5,10 +5,10 @@ import { safeLog } from '@/utils/logger';
 
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
     const data: CustomerData = await request.json();
 
     // Atualizar cliente no Asaas
@@ -49,10 +49,10 @@ export async function PUT(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    const { id } = await params;
 
     // Excluir cliente no Asaas
     await deleteCustomer(id);
@@ -87,10 +87,11 @@ export async function DELETE(
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const asaasId = params.id;
+    const { id } = await params;
+    const asaasId = id;
 
     if (!asaasId) {
       return NextResponse.json(
