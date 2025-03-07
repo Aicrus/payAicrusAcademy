@@ -7,6 +7,8 @@ interface TransactionMetaData {
     preco: number;
   };
   parcelas?: number;
+  lgpdConsent?: boolean;
+  lgpdConsentDate?: string;
 }
 
 export interface Transaction {

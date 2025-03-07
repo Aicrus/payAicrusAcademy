@@ -69,6 +69,7 @@ export default function CreditCardForm() {
     phone: ''
   });
   const [showAdditionalFields, setShowAdditionalFields] = useState(false);
+  const [lgpdConsent, setLgpdConsent] = useState(false);
 
   useEffect(() => {
     const checkCardFieldsComplete = () => {
@@ -139,6 +140,12 @@ export default function CreditCardForm() {
 
     if (!produto) {
       setError('Erro ao carregar informações do produto');
+      return;
+    }
+
+    // Validar consentimento LGPD
+    if (!lgpdConsent) {
+      setError('É necessário aceitar os termos de uso e política de privacidade para continuar');
       return;
     }
 
@@ -213,7 +220,9 @@ export default function CreditCardForm() {
             produto: {
               preco: produto.precoDesconto
             },
-            parcelas: selectedInstallment
+            parcelas: selectedInstallment,
+            lgpdConsent: true,
+            lgpdConsentDate: new Date().toISOString()
           }
         };
 
@@ -771,6 +780,31 @@ export default function CreditCardForm() {
                 </div>
               </motion.div>
             )}
+          </div>
+
+          <div className="mt-6">
+            <div className="flex items-start">
+              <div className="flex items-center h-5">
+                <input
+                  id="lgpd-consent"
+                  name="lgpd-consent"
+                  type="checkbox"
+                  checked={lgpdConsent}
+                  onChange={(e) => setLgpdConsent(e.target.checked)}
+                  className="h-4 w-4 text-[#0F2B1B] focus:ring-[#0F2B1B] border-gray-300 rounded"
+                />
+              </div>
+              <div className="ml-3 text-sm">
+                <label htmlFor="lgpd-consent" className="font-medium text-gray-700">
+                  Autorizo o processamento dos meus dados
+                </label>
+                <p className="text-gray-500">
+                  Concordo com os <a href="/termos" target="_blank" className="text-[#0F2B1B] underline">Termos de Uso</a> e 
+                  <a href="/privacidade" target="_blank" className="text-[#0F2B1B] underline"> Política de Privacidade</a>. 
+                  Autorizo o compartilhamento dos meus dados com a operadora de pagamento para processamento da transação.
+                </p>
+              </div>
+            </div>
           </div>
 
           <button

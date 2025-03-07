@@ -17,6 +17,7 @@ export interface CreditCardHolderInfo {
   addressComplement?: string;
   phone: string;
   mobilePhone: string;
+  observationToCustomer?: string;
 }
 
 export interface CreditCardPaymentData {

@@ -41,7 +41,11 @@ export async function POST(request: Request) {
       description,
       externalReference: transactionId,
       creditCard,
-      creditCardHolderInfo,
+      creditCardHolderInfo: {
+        ...creditCardHolderInfo,
+        // Adicionar informações de consentimento LGPD
+        observationToCustomer: 'Usuário aceitou os termos de uso e política de privacidade, autorizando o processamento dos dados para pagamento.'
+      },
       installmentCount: installmentCount || 1,
       installmentValue: installmentValue || value,
       remoteIp,
