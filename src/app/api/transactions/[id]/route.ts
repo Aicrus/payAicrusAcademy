@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-type RouteParams = {
-  params: {
-    id: string;
-  };
-};
-
 export async function GET(
   request: Request,
-  context: RouteParams
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id: paramId } = context.params;
+    const { id: paramId } = params;
     const id = Number(paramId);
 
     console.log('Consultando transação:', { id });
@@ -59,11 +53,11 @@ export async function GET(
 
 export async function PATCH(
   request: Request,
-  context: RouteParams
+  { params }: { params: { id: string } }
 ) {
   try {
     const data = await request.json();
-    const { id: paramId } = context.params;
+    const { id: paramId } = params;
     const id = Number(paramId);
 
     console.log('Dados recebidos para atualização:', { id, data });

@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
 import { checkPaymentStatus } from '@/services/asaas/payment';
 
-type RouteParams = {
-  params: {
-    id: string;
-  };
-};
-
 export async function GET(
   request: Request,
-  context: RouteParams
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = context.params;
+    const { id } = params;
     console.log('Verificando status do pagamento:', id);
 
     const status = await checkPaymentStatus(id);
