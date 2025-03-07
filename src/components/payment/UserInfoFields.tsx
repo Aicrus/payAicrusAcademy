@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePayment } from '@/contexts/PaymentContext';
 import { motion } from 'framer-motion';
 import { UserIcon, EnvelopeIcon, PhoneIcon, DocumentTextIcon, PencilIcon } from '@heroicons/react/24/outline';
@@ -10,6 +10,37 @@ export default function UserInfoFields() {
   const { userInfo, setUserInfo, isInfoLocked, setIsInfoLocked } = usePayment();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Verificar se o cliente existe e não foi excluído ao carregar o componente
+  useEffect(() => {
+    const verifyCustomer = async () => {
+      if (userInfo?.asaasId) {
+        try {
+          const response = await fetch(`/api/asaas/customers/${userInfo.asaasId}`, {
+            method: 'GET',
+          });
+          
+          if (!response.ok) {
+            const data = await response.json();
+            
+            // Se o cliente foi excluído ou não existe, limpar o ID
+            if (response.status === 404 || (data.error && data.error.includes('Cliente excluído'))) {
+              console.log('Cliente excluído ou não encontrado, limpando ID:', userInfo.asaasId);
+              setUserInfo({
+                ...userInfo,
+                asaasId: undefined
+              });
+              setIsInfoLocked(false);
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao verificar cliente:', err);
+        }
+      }
+    };
+    
+    verifyCustomer();
+  }, [userInfo?.asaasId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,13 +62,37 @@ export default function UserInfoFields() {
         personType: userInfo.cpf.replace(/\D/g, '').length <= 11 ? 'FISICA' : 'JURIDICA'
       };
 
-      // Se já tem ID, atualiza. Se não, cria novo.
+      // Se não tem ID ou se o ID foi limpo (cliente excluído), criar novo
+      if (!userInfo.asaasId) {
+        console.log('Criando novo cliente (sem ID ou ID limpo)');
+        const createResponse = await fetch('/api/asaas/customers', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(customerData)
+        });
+        
+        const createData = await createResponse.json();
+        
+        if (!createResponse.ok) {
+          throw new Error(createData.error || 'Erro ao criar cliente');
+        }
+        
+        setUserInfo({
+          ...userInfo,
+          asaasId: createData.id
+        });
+        
+        setIsInfoLocked(true);
+        return;
+      }
+
+      // Se tem ID, tentar atualizar
       const response = await fetch(
-        userInfo.asaasId 
-          ? `/api/asaas/customers/${userInfo.asaasId}`
-          : '/api/asaas/customers',
+        `/api/asaas/customers/${userInfo.asaasId}`,
         {
-          method: userInfo.asaasId ? 'PUT' : 'POST',
+          method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
           },
@@ -48,6 +103,51 @@ export default function UserInfoFields() {
       const data = await response.json();
 
       if (!response.ok) {
+        // Verificar se é um erro de cliente excluído
+        if (data.error && (data.error.includes('Cliente excluído') || data.error.includes('não encontrado'))) {
+          console.log('Cliente excluído ou não encontrado, criando novo cliente');
+          
+          // Limpar o ID do cliente
+          setUserInfo(prevInfo => ({
+            ...(prevInfo || {
+              name: '',
+              email: '',
+              cpf: '',
+              whatsapp: ''
+            }),
+            asaasId: undefined
+          }));
+          
+          // Criar novo cliente
+          const createResponse = await fetch('/api/asaas/customers', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(customerData)
+          });
+          
+          const createData = await createResponse.json();
+          
+          if (!createResponse.ok) {
+            throw new Error(createData.error || 'Erro ao criar novo cliente');
+          }
+          
+          // Atualizar o ID do cliente
+          setUserInfo(prevInfo => ({
+            ...(prevInfo || {
+              name: '',
+              email: '',
+              cpf: '',
+              whatsapp: ''
+            }),
+            asaasId: createData.id
+          }));
+          
+          setIsInfoLocked(true);
+          return;
+        }
+        
         throw new Error(data.error || 'Erro ao processar informações');
       }
       
@@ -59,11 +159,39 @@ export default function UserInfoFields() {
       setIsInfoLocked(true);
     } catch (err) {
       console.error('Erro ao processar cliente:', err);
-      setError(
-        err instanceof Error 
-          ? err.message 
-          : 'Erro ao processar suas informações. Tente novamente.'
-      );
+      
+      // Mensagem de erro mais amigável para o usuário
+      let errorMessage = 'Erro ao processar suas informações. Tente novamente.';
+      
+      if (err instanceof Error) {
+        if (err.message.includes('Cliente excluído')) {
+          errorMessage = 'Este cadastro foi excluído anteriormente. Por favor, preencha novamente seus dados.';
+        } else if (err.message.includes('não encontrado')) {
+          errorMessage = 'Cadastro não encontrado. Por favor, preencha novamente seus dados.';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+      
+      setError(errorMessage);
+      
+      // Se for um erro de cliente excluído ou não encontrado, liberar os campos para edição
+      if (
+        err instanceof Error && 
+        (err.message.includes('Cliente excluído') || err.message.includes('não encontrado'))
+      ) {
+        setIsInfoLocked(false);
+        // Limpar o ID do cliente para forçar a criação de um novo
+        setUserInfo(prevInfo => ({
+          ...(prevInfo || {
+            name: '',
+            email: '',
+            cpf: '',
+            whatsapp: ''
+          }),
+          asaasId: undefined
+        }));
+      }
     } finally {
       setLoading(false);
     }
@@ -159,6 +287,12 @@ export default function UserInfoFields() {
         </p>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
       <div className="space-y-4">
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-gray-700">
@@ -251,31 +385,19 @@ export default function UserInfoFields() {
         </div>
       </div>
 
-      {!isInfoLocked && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+      <div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-[#0F2B1B] hover:bg-[#1a4a30] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B] disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-base font-medium text-white bg-[#0F2B1B] hover:bg-[#0F2B1B]/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
-            ) : (
-              'CONFIRMAR INFORMAÇÕES'
-            )}
-          </button>
-        </motion.div>
-      )}
-
-      {error && (
-        <div className="text-red-500 text-sm text-center">
-          {error}
-        </div>
-      )}
+          {loading ? (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+          ) : (
+            'Confirmar Informações'
+          )}
+        </button>
+      </div>
     </form>
   );
 } 

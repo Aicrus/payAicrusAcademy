@@ -28,14 +28,33 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verificar se o cliente já existe no Supabase
-    const { data: existingCustomer } = await supabase
+    console.log('Verificando se cliente já existe no Supabase:', {
+      email: data.email,
+      cpfCnpj: data.cpfCnpj
+    });
+
+    // Verificar se o cliente já existe no Supabase pelo email ou CPF/CNPJ
+    const { data: existingCustomerByEmail } = await supabase
       .from('usersAicrusAcademy')
       .select('*')
       .eq('email', data.email)
       .single();
 
-    if (existingCustomer) {
+    const { data: existingCustomerByCpf } = await supabase
+      .from('usersAicrusAcademy')
+      .select('*')
+      .eq('cpfCnpj', data.cpfCnpj)
+      .single();
+
+    const existingCustomer = existingCustomerByEmail || existingCustomerByCpf;
+
+    // Se o cliente existe e tem um ID válido no Asaas, retornar esse cliente
+    if (existingCustomer && existingCustomer.idCustomerAsaas) {
+      console.log('Cliente encontrado no Supabase:', {
+        id: existingCustomer.id,
+        asaasId: existingCustomer.idCustomerAsaas
+      });
+
       return NextResponse.json({
         object: 'customer',
         id: existingCustomer.idCustomerAsaas,
@@ -49,27 +68,60 @@ export async function POST(request: Request) {
     }
 
     // Criar cliente no Asaas
+    console.log('Criando novo cliente no Asaas');
     const customer = await createCustomer(data);
+    console.log('Cliente criado no Asaas:', {
+      id: customer.id,
+      name: customer.name
+    });
 
-    // Criar registro no Supabase
-    const { error: supabaseError } = await supabase
-      .from('usersAicrusAcademy')
-      .insert([
-        {
+    // Se o cliente existe no Supabase mas não tem ID do Asaas, atualizar o registro
+    if (existingCustomer) {
+      console.log('Atualizando cliente existente no Supabase com novo ID do Asaas:', {
+        supabaseId: existingCustomer.id,
+        asaasId: customer.id
+      });
+
+      const { error: updateError } = await supabase
+        .from('usersAicrusAcademy')
+        .update({
           nome: data.name,
           email: data.email,
           cpfCnpj: data.cpfCnpj,
           whatsApp: data.mobilePhone,
           idCustomerAsaas: customer.id
-        }
-      ]);
+        })
+        .eq('id', existingCustomer.id);
 
-    if (supabaseError) {
-      console.error('Erro ao salvar no Supabase:', supabaseError);
-      return NextResponse.json(
-        { error: 'Erro ao salvar dados do cliente' },
-        { status: 500 }
-      );
+      if (updateError) {
+        console.error('Erro ao atualizar Supabase:', updateError);
+        return NextResponse.json(
+          { error: 'Erro ao atualizar dados do cliente' },
+          { status: 500 }
+        );
+      }
+    } else {
+      // Criar novo registro no Supabase
+      console.log('Criando novo registro no Supabase');
+      const { error: insertError } = await supabase
+        .from('usersAicrusAcademy')
+        .insert([
+          {
+            nome: data.name,
+            email: data.email,
+            cpfCnpj: data.cpfCnpj,
+            whatsApp: data.mobilePhone,
+            idCustomerAsaas: customer.id
+          }
+        ]);
+
+      if (insertError) {
+        console.error('Erro ao salvar no Supabase:', insertError);
+        return NextResponse.json(
+          { error: 'Erro ao salvar dados do cliente' },
+          { status: 500 }
+        );
+      }
     }
 
     return NextResponse.json(customer);

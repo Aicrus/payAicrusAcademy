@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateCustomer, deleteCustomer, type CustomerData } from '@/services/asaas/customer';
+import { updateCustomer, deleteCustomer, createCustomer, getCustomer, type CustomerData } from '@/services/asaas/customer';
 import { supabase } from '@/lib/supabase';
 import { safeLog } from '@/utils/logger';
 
@@ -11,7 +11,57 @@ export async function PUT(
     const { id } = await params;
     const data: CustomerData = await request.json();
 
-    // Atualizar cliente no Asaas
+    // Verificar se o cliente existe e obter seus dados atuais
+    const existingCustomer = await getCustomer(id);
+    
+    if (!existingCustomer) {
+      return NextResponse.json(
+        { error: 'Cliente não encontrado. Não é possível fazer alterações.' },
+        { status: 404 }
+      );
+    }
+    
+    if (existingCustomer.deleted) {
+      return NextResponse.json(
+        { error: `O cliente [${id}] não pode ser atualizado: Cliente excluído, não é possível fazer alterações.` },
+        { status: 400 }
+      );
+    }
+
+    // Verificar se o email foi alterado
+    if (existingCustomer.email !== data.email) {
+      console.log('Email alterado. Criando novo cliente em vez de atualizar:', {
+        oldEmail: existingCustomer.email,
+        newEmail: data.email
+      });
+
+      // Criar novo cliente
+      const newCustomer = await createCustomer(data);
+
+      // Atualizar registro no Supabase
+      const { error: supabaseError } = await supabase
+        .from('usersAicrusAcademy')
+        .update({
+          nome: data.name,
+          email: data.email,
+          cpfCnpj: data.cpfCnpj,
+          whatsApp: data.mobilePhone,
+          idCustomerAsaas: newCustomer.id // Atualizar para o novo ID
+        })
+        .eq('idCustomerAsaas', id);
+
+      if (supabaseError) {
+        console.error('Erro ao atualizar Supabase:', supabaseError);
+        return NextResponse.json(
+          { error: 'Erro ao atualizar registro' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json(newCustomer);
+    }
+
+    // Se o email não foi alterado, atualizar cliente normalmente
     const customer = await updateCustomer(id, data);
 
     // Atualizar registro no Supabase

@@ -20,7 +20,62 @@ export interface Customer {
   mobilePhone?: string;
   cpfCnpj: string;
   personType: 'FISICA' | 'JURIDICA';
+  deleted?: boolean;
   // ... outros campos retornados pela API
+}
+
+// Função para verificar se um cliente existe e não foi excluído
+export async function getCustomer(id: string): Promise<Customer | null> {
+  try {
+    console.log('Verificando cliente no Asaas:', { id });
+
+    const url = `${ASAAS_CONFIG.API_URL}/customers/${id}`;
+    console.log('URL da API:', url);
+
+    const headers = ASAAS_CONFIG.getHeaders();
+    console.log('Headers configurados:', {
+      ...headers,
+      access_token: headers.access_token ? '***' : undefined
+    });
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers
+    });
+
+    // Se o cliente não existir, a API retorna 404
+    if (response.status === 404) {
+      console.log('Cliente não encontrado:', { id });
+      return null;
+    }
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      console.error('Erro na resposta do Asaas:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: responseData
+      });
+      return null;
+    }
+
+    // Verificar se o cliente foi excluído
+    if (responseData.deleted) {
+      console.log('Cliente encontrado, mas está excluído:', { id });
+      return responseData;
+    }
+
+    console.log('Cliente encontrado e ativo:', {
+      id: responseData.id,
+      name: responseData.name
+    });
+
+    return responseData;
+  } catch (error) {
+    console.error('Erro ao verificar cliente:', error);
+    return null;
+  }
 }
 
 export async function createCustomer(data: CustomerData): Promise<Customer> {
@@ -87,6 +142,17 @@ export async function updateCustomer(id: string, data: CustomerData): Promise<Cu
       email: data.email,
       cpfCnpj: data.cpfCnpj
     });
+
+    // Verificar se o cliente existe e não foi excluído
+    const existingCustomer = await getCustomer(id);
+    
+    if (!existingCustomer) {
+      throw new Error('Cliente não encontrado. Não é possível fazer alterações.');
+    }
+    
+    if (existingCustomer.deleted) {
+      throw new Error(`O cliente [${id}] não pode ser atualizado: Cliente excluído, não é possível fazer alterações.`);
+    }
 
     const url = `${ASAAS_CONFIG.API_URL}/customers/${id}`;
     console.log('URL da API:', url);
