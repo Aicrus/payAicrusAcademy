@@ -1,6 +1,56 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { id: paramId } = params;
+    const id = Number(paramId);
+
+    console.log('Consultando transação:', { id });
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'ID da transação inválido' },
+        { status: 400 }
+      );
+    }
+
+    // Buscar transação no Supabase
+    const { data: transaction, error } = await supabase
+      .from('transacoes')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('Erro ao buscar transação:', error);
+      return NextResponse.json(
+        { error: `Erro ao buscar transação: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
+    if (!transaction) {
+      return NextResponse.json(
+        { error: 'Transação não encontrada' },
+        { status: 404 }
+      );
+    }
+
+    console.log('Transação encontrada:', transaction);
+    return NextResponse.json(transaction);
+  } catch (error) {
+    console.error('Erro ao processar requisição:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Erro interno do servidor' },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

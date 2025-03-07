@@ -163,6 +163,15 @@ export class TransactionService {
     }
   }
 
+  static clearCache(): void {
+    try {
+      localStorage.removeItem(TRANSACTION_CACHE_KEY);
+      console.log('Cache de transação limpo com sucesso');
+    } catch (error) {
+      console.error('Erro ao limpar cache de transação:', error);
+    }
+  }
+
   static async finalizeTransaction(id: number) {
     try {
       // Primeiro, buscar os dados da transação

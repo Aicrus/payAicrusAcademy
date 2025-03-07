@@ -52,55 +52,77 @@ export default function PixForm() {
   }, [autoCheckInterval]);
 
   useEffect(() => {
-    if (pixData?.paymentId && currentTransaction?.id) {
-      const checkInterval = setInterval(async () => {
-        try {
-          const response = await fetch(`/api/asaas/payments/${pixData.paymentId}/status`);
-          const data = await response.json();
-          
-          if (data.status) {
-            setPaymentStatus(prevStatus => ({
-              ...prevStatus!,
-              status: data.status,
-              confirmedDate: data.confirmedDate,
-              paymentDate: data.paymentDate
-            }));
-
-            if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
-              try {
-                await TransactionService.finalizeTransaction(currentTransaction.id);
-                safeLog('Transação finalizada com sucesso');
-              } catch (error) {
-                console.error('Erro ao finalizar transação:', error);
-              }
-              clearInterval(checkInterval);
-            }
-          }
-        } catch (error) {
-          console.error('Erro ao verificar status do pagamento:', error);
-        }
-      }, 5000);
-
-      return () => clearInterval(checkInterval);
+    if (currentTransaction?.id && currentTransaction?.idPayAsaas) {
+      console.log('Verificando status inicial da transação:', currentTransaction.id);
+      checkPaymentStatus(currentTransaction.idPayAsaas);
     }
-  }, [pixData?.paymentId, currentTransaction]);
+  }, [currentTransaction]);
+
+  useEffect(() => {
+    if (paymentStatus) {
+      console.log('Status do pagamento atualizado:', paymentStatus.status);
+      
+      if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(paymentStatus.status)) {
+        console.log('Pagamento confirmado, finalizando verificação');
+        if (autoCheckInterval) {
+          clearInterval(autoCheckInterval);
+          setAutoCheckInterval(null);
+        }
+      }
+    }
+  }, [paymentStatus, autoCheckInterval]);
 
   const checkPaymentStatus = async (paymentId: string) => {
     try {
       setIsVerifying(true);
-      const response = await fetch(`/api/asaas/payments/${paymentId}/status`);
-      const data = await response.json();
       
-      if (data.status) {
-        setPaymentStatus(prevStatus => ({
-          ...prevStatus!,
-          status: data.status,
-          confirmedDate: data.confirmedDate,
-          paymentDate: data.paymentDate
-        }));
+      // Verificar diretamente na tabela de transações
+      if (currentTransaction?.id) {
+        console.log('Verificando status da transação:', currentTransaction.id);
+        
+        try {
+          const response = await fetch(`/api/transactions/${currentTransaction.id}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (!response.ok) {
+            throw new Error(`Erro ao buscar transação: ${response.status} ${response.statusText}`);
+          }
+          
+          const transactionData = await response.json();
+          console.log('Dados da transação:', transactionData);
+          
+          if (transactionData && transactionData.status) {
+            // Atualizar o status do pagamento
+            setPaymentStatus(prevStatus => ({
+              ...prevStatus!,
+              status: transactionData.status,
+              confirmedDate: transactionData.dataHora || null,
+              paymentDate: transactionData.dataHora || null
+            }));
+            
+            // Se o pagamento foi confirmado, finalizar a transação
+            if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(transactionData.status)) {
+              console.log('Pagamento confirmado, finalizando transação...');
+              try {
+                await TransactionService.finalizeTransaction(transactionData.id);
+                console.log('Transação finalizada com sucesso');
+              } catch (error) {
+                console.error('Erro ao finalizar transação:', error);
+              }
+            }
+            
+            return transactionData.status;
+          }
+        } catch (error) {
+          console.error('Erro ao buscar transação:', error);
+        }
       }
       
-      return data.status;
+      return null;
     } catch (error) {
       console.error('Erro ao verificar status do pagamento:', error);
       return null;
@@ -114,29 +136,41 @@ export default function PixForm() {
       clearInterval(autoCheckInterval);
     }
     
-    setTimeout(async () => {
-      const status = await checkPaymentStatus(paymentId);
-      if (status === 'RECEIVED' || status === 'CONFIRMED' || status === 'RECEIVED_IN_CASH') {
-        if (autoCheckInterval) {
-          clearInterval(autoCheckInterval);
-          setAutoCheckInterval(null);
-        }
-      }
-    }, 45000);
-
+    console.log('Iniciando verificação automática para o pagamento:', paymentId);
+    
+    // Verificar imediatamente uma vez
+    checkPaymentStatus(paymentId);
+    
+    // Configuração para verificar 4 vezes em 2 minutos (30 segundos entre cada verificação)
+    const checkCount = { current: 0 };
+    const maxChecks = 4;
+    const checkInterval = 30000; // 30 segundos
+    
     const interval = setInterval(async () => {
+      checkCount.current += 1;
+      console.log(`Verificação ${checkCount.current}/${maxChecks} do pagamento ${paymentId}`);
+      
       const status = await checkPaymentStatus(paymentId);
+      console.log('Status retornado:', status);
+      
       if (status === 'RECEIVED' || status === 'CONFIRMED' || status === 'RECEIVED_IN_CASH') {
+        console.log('Pagamento confirmado, parando verificação automática');
+        clearInterval(interval);
+        setAutoCheckInterval(null);
+      } else if (checkCount.current >= maxChecks) {
+        // Parar após 4 verificações
+        console.log('Máximo de verificações atingido, parando verificação automática');
         clearInterval(interval);
         setAutoCheckInterval(null);
       }
-    }, 20000);
+    }, checkInterval);
 
     setAutoCheckInterval(interval);
   };
 
   const handleManualCheck = () => {
     if (pixData?.paymentId) {
+      console.log('Verificação manual iniciada para o pagamento:', pixData.paymentId);
       checkPaymentStatus(pixData.paymentId);
     }
   };
@@ -154,11 +188,6 @@ export default function PixForm() {
 
     if (!produto) {
       setError('Erro ao carregar informações do produto');
-      return;
-    }
-
-    if (produto.precoDesconto < 5) {
-      setError('O valor mínimo para pagamento via PIX é de R$ 5,00');
       return;
     }
 
@@ -282,6 +311,7 @@ export default function PixForm() {
       const data = await responsePix.json();
 
       try {
+        // Salvar o ID do PIX na tabela de transações
         await TransactionService.updateTransaction(transaction.id, {
           idPayAsaas: data.paymentId
         });
@@ -543,7 +573,7 @@ export default function PixForm() {
 
           <div className="bg-[#0F2B1B]/5 rounded-lg p-4">
             <p className="text-sm text-[#0F2B1B]">
-              Assim que recebermos a confirmação do pagamento, enviaremos um comprovante para seu WhatsApp ({userInfo?.whatsapp}) e email ({userInfo?.email}).
+              Assim que recebermos a confirmação do pagamento, enviaremos um comprovante para seu email ({userInfo?.email}).
             </p>
           </div>
         </div>

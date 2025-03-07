@@ -83,6 +83,11 @@ const validatePixData = (data: CreatePixPaymentData) => {
     throw new Error('Descrição inválida');
   }
 
+  // Validar valor
+  if (data.value <= 0) {
+    throw new Error('Valor deve ser maior que zero');
+  }
+
   // Validar data de expiração
   if (data.expirationDate) {
     const expDate = new Date(data.expirationDate);
@@ -113,7 +118,7 @@ export async function createPixPayment(data: CreatePixPaymentData): Promise<PixP
     }
 
     // Não logar dados sensíveis
-    console.log('Iniciando criação de pagamento PIX');
+    console.log('Iniciando criação de pagamento PIX estático');
 
     const url = `${process.env.NEXT_PUBLIC_ASAAS_API_URL}/pix/qrCodes/static`;
     
@@ -143,7 +148,7 @@ export async function createPixPayment(data: CreatePixPaymentData): Promise<PixP
     });
 
     // Evitar logging de dados sensíveis
-    console.log('Iniciando requisição para Asaas');
+    console.log('Iniciando requisição para Asaas - PIX estático');
 
     const body = {
       addressKey: data.addressKey,
@@ -154,6 +159,14 @@ export async function createPixPayment(data: CreatePixPaymentData): Promise<PixP
       expirationDate: data.expirationDate || getDefaultExpirationDate(),
       allowsMultiplePayments: data.allowsMultiplePayments || false
     };
+
+    console.log('Dados do PIX estático:', {
+      description: body.description,
+      value: body.value,
+      format: body.format,
+      expirationDate: body.expirationDate,
+      allowsMultiplePayments: body.allowsMultiplePayments
+    });
 
     try {
       const response = await fetch(url, {
@@ -195,7 +208,7 @@ export async function createPixPayment(data: CreatePixPaymentData): Promise<PixP
       }
 
       // Log apenas do ID para rastreamento
-      console.log('QR Code PIX gerado com sucesso:', {
+      console.log('QR Code PIX estático gerado com sucesso:', {
         id: responseData.id,
         hasEncodedImage: !!responseData.encodedImage,
         hasPayload: !!responseData.payload
@@ -212,7 +225,7 @@ export async function createPixPayment(data: CreatePixPaymentData): Promise<PixP
     }
   } catch (error) {
     // Não expor detalhes do erro na produção
-    console.error('Erro ao processar pagamento:', error);
+    console.error('Erro ao processar pagamento PIX estático:', error);
     throw error;
   }
 }
@@ -376,7 +389,8 @@ export async function createBoletoPayment(data: AsaasBoletoPaymentData): Promise
   try {
     console.log('Iniciando criação de boleto...', {
       customer: data.customer,
-      value: data.value
+      value: data.value,
+      dueDate: data.dueDate
     });
 
     const url = `${ASAAS_CONFIG.API_URL}/payments`;
@@ -385,22 +399,42 @@ export async function createBoletoPayment(data: AsaasBoletoPaymentData): Promise
     const headers = ASAAS_CONFIG.getHeaders();
     console.log('Headers configurados:', {
       ...headers,
-      access_token: headers.access_token ? '***' : undefined
+      access_token: headers.access_token ? headers.access_token.substring(0, 10) + '...' : undefined
     });
 
-    // Adicionar configuração para desativar notificações
+    // Adicionar configuração para desativar notificações e garantir que o valor seja um número
     const paymentData = {
-      ...data,
+      customer: data.customer,
+      billingType: 'BOLETO',
+      value: Number(Number(data.value).toFixed(2)),
+      dueDate: data.dueDate,
+      description: data.description,
       postalService: false
     };
+
+    console.log('Dados do boleto a serem enviados:', JSON.stringify(paymentData));
 
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(paymentData)
+      body: JSON.stringify(paymentData),
+      cache: 'no-store'
     });
 
-    const responseData = await response.json();
+    console.log('Status da resposta:', response.status, response.statusText);
+
+    // Obter o texto da resposta
+    const responseText = await response.text();
+    console.log('Resposta recebida (primeiros 200 caracteres):', responseText.substring(0, 200));
+
+    // Tentar converter para JSON
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Erro ao processar resposta JSON:', e);
+      throw new Error('Resposta inválida do servidor Asaas: ' + responseText.substring(0, 100));
+    }
     
     if (!response.ok) {
       console.error('Erro na resposta do Asaas:', {
@@ -408,12 +442,23 @@ export async function createBoletoPayment(data: AsaasBoletoPaymentData): Promise
         statusText: response.statusText,
         data: responseData
       });
-      throw new Error(responseData.errors?.[0]?.description || 'Erro ao criar boleto');
+      
+      const errorMessage = responseData.errors && responseData.errors.length > 0
+        ? responseData.errors.map((e: any) => e.description).join(', ')
+        : 'Erro ao criar boleto';
+        
+      throw new Error(errorMessage);
+    }
+
+    if (!responseData.id || !responseData.bankSlipUrl) {
+      console.error('Resposta incompleta do Asaas:', responseData);
+      throw new Error('Resposta incompleta do servidor Asaas');
     }
 
     console.log('Boleto criado com sucesso:', {
       id: responseData.id,
-      status: responseData.status
+      status: responseData.status,
+      bankSlipUrl: responseData.bankSlipUrl ? 'URL válida' : 'URL não encontrada'
     });
 
     return {
@@ -425,7 +470,7 @@ export async function createBoletoPayment(data: AsaasBoletoPaymentData): Promise
       description: responseData.description
     };
   } catch (error) {
-    console.error('Erro ao criar boleto:', error);
+    console.error('Erro detalhado ao criar boleto:', error);
     throw error;
   }
 }
@@ -438,36 +483,71 @@ export async function getBoletoIdentification(paymentId: string): Promise<Boleto
     console.log('URL da API:', url);
 
     const headers = ASAAS_CONFIG.getHeaders();
-    console.log('Headers configurados:', {
+    console.log('Headers configurados (token parcial):', {
       ...headers,
-      access_token: headers.access_token ? '***' : undefined
+      access_token: headers.access_token ? headers.access_token.substring(0, 10) + '...' : undefined
     });
+
+    // Adicionar um pequeno atraso para garantir que o boleto foi processado
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     const response = await fetch(url, {
       method: 'GET',
-      headers
+      headers,
+      cache: 'no-store'
     });
 
-    const data = await response.json();
-    
+    console.log('Status da resposta:', response.status, response.statusText);
+
+    // Obter o texto da resposta
+    const responseText = await response.text();
+    console.log('Resposta recebida (parcial):', responseText.substring(0, 100) + '...');
+
+    // Tentar converter para JSON
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Erro ao processar resposta JSON:', e);
+      // Se falhar, retornar valores padrão para não bloquear o fluxo
+      console.log('Retornando valores padrão para linha digitável');
+      return {
+        identificationField: "Linha digitável indisponível no momento",
+        nossoNumero: "",
+        barCode: ""
+      };
+    }
+
     if (!response.ok) {
       console.error('Erro na resposta do Asaas:', {
         status: response.status,
         statusText: response.statusText,
-        data
+        data: responseData
       });
-      throw new Error(data.errors?.[0]?.description || 'Erro ao obter linha digitável');
+      
+      // Se falhar, retornar valores padrão para não bloquear o fluxo
+      console.log('Retornando valores padrão para linha digitável devido a erro');
+      return {
+        identificationField: "Linha digitável indisponível no momento",
+        nossoNumero: "",
+        barCode: ""
+      };
     }
 
     console.log('Linha digitável obtida com sucesso');
 
     return {
-      identificationField: data.identificationField,
-      nossoNumero: data.nossoNumero,
-      barCode: data.barCode
+      identificationField: responseData.identificationField || "Linha digitável indisponível",
+      nossoNumero: responseData.nossoNumero || "",
+      barCode: responseData.barCode || ""
     };
   } catch (error) {
     console.error('Erro ao obter linha digitável:', error);
-    throw error;
+    // Se falhar, retornar valores padrão para não bloquear o fluxo
+    return {
+      identificationField: "Linha digitável indisponível no momento",
+      nossoNumero: "",
+      barCode: ""
+    };
   }
 } 

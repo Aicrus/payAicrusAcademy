@@ -44,9 +44,9 @@ export default function BoletoForm() {
       return;
     }
 
-    // Validar valor mínimo
+    // Validar valor mínimo exigido pelo Asaas (R$ 5,00)
     if (produto.precoDesconto < 5) {
-      setError('O valor mínimo para pagamento via boleto é de R$ 5,00');
+      setError('O valor mínimo para pagamento via boleto é de R$ 5,00 (restrição da operadora de pagamento)');
       return;
     }
 
@@ -150,6 +150,7 @@ export default function BoletoForm() {
         users: transaction.users
       });
         
+      console.log('Enviando requisição para gerar boleto...');
       const responseBoleto = await fetch('/api/asaas/boleto', {
         method: 'POST',
         headers: {
@@ -159,16 +160,37 @@ export default function BoletoForm() {
           customerId: userInfo.asaasId,
           description: `Assinatura Aicrus Academy - ${userInfo.email}`,
           value: Number(produto.precoDesconto.toFixed(2))
-        })
+        }),
+        cache: 'no-store'
+      });
+
+      console.log('Resposta da API de boleto:', {
+        status: responseBoleto.status,
+        statusText: responseBoleto.statusText
       });
 
       if (!responseBoleto.ok) {
-        const errorData = await responseBoleto.json();
-        console.error('Erro na resposta da API Boleto:', errorData);
+        const errorText = await responseBoleto.text();
+        console.error('Erro na resposta da API Boleto:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: 'Erro ao processar resposta do servidor' };
+        }
+        
         throw new Error(errorData.error || 'Falha ao gerar boleto');
       }
 
       const data = await responseBoleto.json();
+      console.log('Boleto gerado com sucesso:', data);
+
+      // Verificar se os dados do boleto estão completos
+      if (!data.paymentId || !data.bankSlipUrl) {
+        console.error('Dados do boleto incompletos:', data);
+        throw new Error('Dados do boleto incompletos. Por favor, tente novamente.');
+      }
 
       // Atualizar transação com ID do pagamento
       try {
@@ -256,6 +278,11 @@ export default function BoletoForm() {
                       <li>✓ Pode ser pago em qualquer banco</li>
                       <li>✓ Acesso liberado após compensação</li>
                     </ul>
+                    {produto && produto.precoDesconto < 5 && (
+                      <div className="mt-2 text-amber-600 text-sm font-medium">
+                        ⚠️ Valor mínimo para boleto: R$ 5,00 (restrição da operadora)
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -312,21 +339,27 @@ export default function BoletoForm() {
                     <li>✓ Pode ser pago em qualquer banco</li>
                     <li>✓ Acesso liberado após compensação</li>
                   </ul>
+                  {produto && produto.precoDesconto < 5 && (
+                    <div className="mt-2 text-amber-600 text-sm font-medium">
+                      ⚠️ Valor mínimo para boleto: R$ 5,00 (restrição da operadora)
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             <button
+              id="generate-boleto-button"
               onClick={handleGenerateBoleto}
-              disabled={loading}
-              className="w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-base font-medium text-white bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B] transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+              disabled={loading || (produto ? produto.precoDesconto < 5 : false)}
+              className="w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-base font-medium text-white bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B] transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
               ) : (
                 <>
                   <DocumentTextIcon className="h-5 w-5 mr-3" />
-                  GERAR BOLETO
+                  {produto && produto.precoDesconto < 5 ? 'VALOR MÍNIMO R$ 5,00' : 'GERAR BOLETO'}
                 </>
               )}
             </button>
@@ -420,7 +453,7 @@ export default function BoletoForm() {
 
           <div className="bg-yellow-50 rounded-lg p-4">
             <p className="text-sm text-yellow-700">
-              Assim que recebermos a confirmação do pagamento, enviaremos um comprovante para seu WhatsApp ({userInfo?.whatsapp}) e email ({userInfo?.email}).
+              Assim que recebermos a confirmação do pagamento, enviaremos um comprovante para seu email ({userInfo?.email}).
             </p>
           </div>
         </div>

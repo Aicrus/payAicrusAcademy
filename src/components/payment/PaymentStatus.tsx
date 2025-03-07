@@ -1,5 +1,8 @@
 import { motion } from 'framer-motion';
 import { CheckCircleIcon, XCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { useEffect, useState } from 'react';
+import { TransactionService } from '@/services/transaction';
+import { useRouter } from 'next/navigation';
 
 interface PaymentStatusProps {
   status: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH';
@@ -56,6 +59,43 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying }: Pa
   const config = statusConfig[status];
   const Icon = config.icon;
   const isPaid = status === 'RECEIVED' || status === 'CONFIRMED' || status === 'RECEIVED_IN_CASH';
+  const [showDialog, setShowDialog] = useState(false);
+  const router = useRouter();
+  
+  // Efeito para mostrar o diálogo quando o pagamento for confirmado
+  useEffect(() => {
+    if (isPaid) {
+      console.log('Pagamento confirmado, exibindo diálogo...', status);
+      setShowDialog(true);
+    }
+  }, [isPaid, status]);
+
+  // Função para limpar o cache e recarregar a página
+  const handleConfirmation = () => {
+    console.log('Limpando cache e redirecionando...');
+    
+    // Limpar o cache de transação
+    try {
+      TransactionService.clearCache();
+      
+      // Limpar outros caches do localStorage
+      localStorage.removeItem('userInfo');
+      localStorage.removeItem('paymentInfo');
+      localStorage.removeItem('productInfo');
+      
+      console.log('Cache limpo com sucesso');
+    } catch (error) {
+      console.error('Erro ao limpar cache:', error);
+    }
+    
+    // Fechar o diálogo
+    setShowDialog(false);
+    
+    // Redirecionar para a página inicial ou recarregar a página
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 500);
+  };
 
   // Status sempre visível
   return (
@@ -137,9 +177,9 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying }: Pa
       </motion.div>
 
       {/* Dialog modal para pagamento confirmado */}
-      {isPaid && (
+      {showDialog && isPaid && (
         <div className="fixed inset-0 z-50 min-h-screen">
-          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" />
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowDialog(false)} />
           <div className="fixed inset-0 flex items-center justify-center p-4">
             <motion.div
               className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden"
@@ -178,6 +218,20 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying }: Pa
                   <p className="mt-2 text-gray-600">
                     Seu acesso será liberado em instantes.
                   </p>
+                </motion.div>
+                
+                <motion.div
+                  className="mt-6 w-full"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.3 }}
+                >
+                  <button
+                    onClick={handleConfirmation}
+                    className="w-full py-2 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                  >
+                    Entendi
+                  </button>
                 </motion.div>
               </div>
             </motion.div>

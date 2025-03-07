@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createAsaasPayment, getAsaasPixQrCode } from '@/services/asaas/payment';
+import { createPixPayment } from '@/services/asaas/payment';
 import { ASAAS_CONFIG } from '@/config/asaas';
 
 interface PixRequestData {
@@ -63,47 +63,37 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validar valor mínimo
-    if (data.value < 5) {
-      console.error('Valor menor que o mínimo:', data.value);
-      return NextResponse.json(
-        { error: 'O valor mínimo para pagamento via PIX é de R$ 5,00' },
-        { status: 400 }
-      );
-    }
-
     // Garante que o valor tenha no máximo 2 casas decimais
     const value = Number(data.value.toFixed(2));
     
-    // Gerar data de vencimento (24h a partir de agora)
-    const dueDate = new Date();
-    dueDate.setHours(dueDate.getHours() + 24);
-    const dueDateStr = dueDate.toISOString().split('T')[0];
-
-    // Criar pagamento
-    console.log('Criando pagamento...');
-    const payment = await createAsaasPayment({
-      customer: data.customerId,
-      billingType: 'PIX',
+    // Criar QR Code PIX estático diretamente
+    console.log('Gerando QR Code PIX estático...');
+    
+    // Data de expiração para o próximo ano
+    const expirationDate = new Date();
+    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+    const expirationDateStr = expirationDate.toISOString().split('T')[0] + ' 23:59:59';
+    
+    // Chave PIX fixa do sistema
+    const addressKey = "7a131f8e-d75a-45b5-b999-09944c333a5d";
+    
+    const pixData = await createPixPayment({
+      addressKey: addressKey,
+      description: `Assinatura Aicrus Academy - ${data.description}`,
       value: value,
-      dueDate: dueDateStr,
-      description: data.description
+      format: 'ALL',
+      expirationDate: expirationDateStr,
+      allowsMultiplePayments: true
     });
 
-    console.log('Pagamento criado:', payment);
-
-    // Gerar QR Code
-    console.log('Gerando QR Code...');
-    const qrCode = await getAsaasPixQrCode(payment.id);
-
-    console.log('PIX gerado com sucesso');
+    console.log('PIX estático gerado com sucesso');
 
     return NextResponse.json({
-      paymentId: payment.id,
-      status: payment.status,
-      encodedImage: qrCode.encodedImage,
-      payload: qrCode.payload,
-      expirationDate: qrCode.expirationDate
+      paymentId: pixData.id,
+      status: 'PENDING',
+      encodedImage: pixData.encodedImage,
+      payload: pixData.payload,
+      expirationDate: pixData.expirationDate
     });
   } catch (error) {
     console.error('Erro detalhado na rota de criação de PIX:', error);
