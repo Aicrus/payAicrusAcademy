@@ -318,6 +318,26 @@ export default function PaymentPage() {
                   onApplyCoupon={handleApplyCoupon}
                   formatarValor={formatarValor}
                 />
+                
+                {/* Campo de cupom - Versão Mobile */}
+                <div className="mt-2 border-t border-white/10 pt-3">
+                  <div className="flex space-x-2">
+                    <input 
+                      type="text" 
+                      placeholder="Cupom de desconto" 
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      className="flex-1 bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 placeholder-white/40"
+                    />
+                    <button 
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      className="bg-white/10 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-4 sm:space-y-5 lg:space-y-6">
@@ -455,37 +475,6 @@ export default function PaymentPage() {
                 <p className="text-[9px] sm:text-[10px] text-gray-700">
                   Parcelamento sujeito a tarifa de <span className="font-bold">3,02% a.m.</span>
                 </p>
-                
-                {/* Campo de cupom */}
-                <div className="mt-3 mb-2 border-t border-gray-100 pt-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-gray-700 font-medium text-sm">Valor total</p>
-                    <p className="text-gray-900 font-bold text-sm">
-                      {discountApplied && (
-                        <span className="line-through text-gray-500 mr-2">
-                          R$ {formatarValor(produto?.valor || 0)}
-                        </span>
-                      )}
-                      R$ {formatarValor(valorExibido)}
-                    </p>
-                  </div>
-                  <div className="flex space-x-2">
-                    <input 
-                      type="text" 
-                      placeholder="Cupom de desconto" 
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#0F2B1B] focus:border-[#0F2B1B]"
-                    />
-                    <button 
-                      type="button"
-                      onClick={handleApplyCoupon}
-                      className="bg-[#0F2B1B] text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-[#1a4a30] transition-colors"
-                    >
-                      Aplicar
-                    </button>
-                  </div>
-                </div>
                 
                 <p className="text-center text-gray-500 mt-1.5 text-[11px] sm:text-[12px] font-medium">
                   ©2025 Todos os direitos reservados · Aicrus Academy
