@@ -291,7 +291,7 @@ export default function PaymentPage() {
                     Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
                   </p>
                   <p className="text-[9px] sm:text-[10px] text-white/70">
-                    Parcelamento sujeito a tarifa de <span className="font-bold">3,02% a.m.</span>
+                    Parcelamento sujeito a tarifa de <span className="font-bold">2,55% a.m.</span>
                   </p>
                 </div>
                 <div className="text-center mt-1">
@@ -473,7 +473,7 @@ export default function PaymentPage() {
                   Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
                 </p>
                 <p className="text-[9px] sm:text-[10px] text-gray-700">
-                  Parcelamento sujeito a tarifa de <span className="font-bold">3,02% a.m.</span>
+                  Parcelamento sujeito a tarifa de <span className="font-bold">2,55% a.m.</span>
                 </p>
                 
                 <p className="text-center text-gray-500 mt-1.5 text-[11px] sm:text-[12px] font-medium">
