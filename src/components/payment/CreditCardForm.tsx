@@ -70,7 +70,7 @@ export default function CreditCardForm() {
     phone: ''
   });
   const [showAdditionalFields, setShowAdditionalFields] = useState(false);
-  const [lgpdConsent, setLgpdConsent] = useState(true);
+  const [lgpdConsent] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState<{
     id: string;
     status: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH';
@@ -869,36 +869,13 @@ export default function CreditCardForm() {
           </div>
 
           <div className="mt-6">
-            <div className="flex items-start">
-              <div className="flex items-center h-5">
-                <input
-                  id="lgpd-consent"
-                  name="lgpd-consent"
-                  type="checkbox"
-                  checked={lgpdConsent}
-                  onChange={(e) => setLgpdConsent(e.target.checked)}
-                  className="h-4 w-4 text-[#38A169] focus:ring-[#38A169] border-gray-300 rounded"
-                />
-              </div>
-              <div className="ml-3 text-sm">
-                <label htmlFor="lgpd-consent" className="font-medium text-gray-700">
-                  Autorizo processamento dos dados
-                </label>
-                <p className="text-gray-500">
-                  Para esta e futuras cobranças. Concordo com os <a href="/termos" target="_blank" className="text-[#0F2B1B] underline">Termos</a> e <a href="/privacidade" target="_blank" className="text-[#0F2B1B] underline">Privacidade</a>.
-                </p>
-              </div>
-            </div>
+            {/* Checkbox de consentimento LGPD removido */}
           </div>
 
           <button
             type="submit"
-            disabled={loading || !lgpdConsent}
-            className={`w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-base font-medium text-white transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] ${
-              lgpdConsent 
-                ? "bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B]" 
-                : "bg-gray-400 cursor-not-allowed"
-            }`}
+            disabled={loading}
+            className={`w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-base font-medium text-white transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B]`}
           >
             {loading ? (
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />

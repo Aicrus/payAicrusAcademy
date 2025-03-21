@@ -29,41 +29,41 @@ function ProdutoInfo({ produto, isCompact = false }: { produto: Produto, isCompa
         />
       </div>
 
-      <div className={isCompact ? "" : "mt-6"}>
-        <h2 className={`text-white/80 ${isCompact ? "text-[10px] sm:text-xs mb-1" : "text-xs mb-2"}`}>
+      <div className={isCompact ? "mb-2" : "mt-6"}>
+        <h2 className={`text-white/80 ${isCompact ? "text-sm sm:text-base mb-2" : "text-xs mb-2"}`}>
           Assinar {produto.nomeProduto}
         </h2>
         <div className="flex flex-col">
           <div className="flex items-baseline space-x-2">
-            <span className={`text-white/60 line-through ${isCompact ? "text-xs sm:text-sm" : "text-xl"}`}>
+            <span className={`text-white/60 line-through ${isCompact ? "text-base sm:text-lg" : "text-xl"}`}>
               R$ {produto.valorAntigo.toFixed(2)}
             </span>
-            <span className={`bg-green-500/20 text-green-400 ${isCompact ? "text-[8px] sm:text-[10px] px-1.5 py-0.5" : "text-xs px-2 py-0.5"} rounded`}>
+            <span className={`bg-green-500/20 text-green-400 ${isCompact ? "text-xs sm:text-sm px-1.5 py-0.5" : "text-xs px-2 py-0.5"} rounded`}>
               {produto.porcentagemDesconto}
             </span>
           </div>
-          <div className="flex items-baseline space-x-2 mt-1">
-            <span className={`text-white font-semibold ${isCompact ? "text-base sm:text-xl" : "text-3xl"}`}>
+          <div className="flex items-baseline space-x-2 mt-2">
+            <span className={`text-white font-bold ${isCompact ? "text-2xl sm:text-3xl" : "text-3xl"}`}>
               R$ {produto.valor.toFixed(2)}
             </span>
-            <span className={`text-white/60 ${isCompact ? "text-[10px] sm:text-xs" : "text-sm"}`}>
+            <span className={`text-white/60 ${isCompact ? "text-sm sm:text-base" : "text-sm"}`}>
               {produto.prazo}
             </span>
           </div>
         </div>
       </div>
 
-      <div className={`${isCompact ? "bg-white/5 rounded-md p-2 sm:p-3 mt-2" : "mt-6 bg-white/5 rounded-lg p-5"} w-full`}>
+      <div className={`${isCompact ? "bg-white/5 rounded-md p-3 sm:p-4 mt-3" : "mt-6 bg-white/5 rounded-lg p-5"} w-full`}>
         <div className={`${isCompact ? "space-y-1.5" : "space-y-3"}`}>
-          <div className={`flex justify-between text-white/80 ${isCompact ? "text-[10px] sm:text-xs" : "text-sm"}`}>
+          <div className={`flex justify-between text-white/80 ${isCompact ? "text-sm sm:text-base" : "text-sm"}`}>
             <span>Acesso {produto.prazo}</span>
             <span>R$ {produto.valor.toFixed(2)}</span>
           </div>
-          <div className={`${isCompact ? "text-[8px] sm:text-[10px]" : "text-xs"} text-white/60`}>
+          <div className={`${isCompact ? "text-xs sm:text-sm" : "text-xs"} text-white/60`}>
             <span>Pagamento anual</span>
           </div>
           <div className={`border-t border-white/10 ${isCompact ? "pt-1.5 mt-1.5" : "pt-3 mt-3"}`}>
-            <div className={`flex justify-between ${isCompact ? "text-[10px] sm:text-xs" : "text-sm"} text-white`}>
+            <div className={`flex justify-between ${isCompact ? "text-sm sm:text-base" : "text-sm"} text-white`}>
               <span>Valor total</span>
               <span>R$ {produto.valor.toFixed(2)}</span>
             </div>
@@ -72,31 +72,35 @@ function ProdutoInfo({ produto, isCompact = false }: { produto: Produto, isCompa
       </div>
 
       {isCompact ? (
-        <div className="grid grid-cols-2 gap-3 text-white/80 mt-3">
+        <div className="grid grid-cols-2 gap-3 text-white/80 mt-4">
           <div className="flex items-center space-x-2">
-            <ShieldCheckIcon className="h-3 w-3 text-green-400 flex-shrink-0" />
-            <span className="text-[9px] sm:text-[10px]">Garantia de 7 dias</span>
+            <ShieldCheckIcon className="h-4 w-4 text-green-400 flex-shrink-0" />
+            <span className="text-xs sm:text-sm">Garantia de 7 dias</span>
           </div>
           <div className="flex items-center space-x-2">
-            <ShieldCheckIcon className="h-3 w-3 text-green-400 flex-shrink-0" />
-            <span className="text-[9px] sm:text-[10px]">Suporte premium</span>
+            <ShieldCheckIcon className="h-4 w-4 text-green-400 flex-shrink-0" />
+            <span className="text-xs sm:text-sm">Suporte premium</span>
           </div>
         </div>
       ) : (
-        <div className="mt-6 space-y-5 w-full">
-          <div className="flex items-center space-x-3 text-white/80">
-            <ShieldCheckIcon className="h-4 w-4 text-green-400" />
-            <span className="text-xs">Garantia de 7 dias</span>
+        <div className="mt-6 space-y-3 w-full">
+          <div className="space-y-0.5">
+            <div className="flex items-center space-x-3 text-white/80">
+              <ShieldCheckIcon className="h-4 w-4 text-green-400" />
+              <span className="text-xs">Garantia de 7 dias</span>
+            </div>
+            <div className="text-xs text-white/60 pl-7">
+              Experimente sem risco e descubra como essa oportunidade pode transformar sua vida de maneira positiva.
+            </div>
           </div>
-          <div className="text-xs text-white/60">
-            Experimente sem risco e descubra como essa oportunidade pode transformar sua vida de maneira positiva.
-          </div>
-          <div className="flex items-center space-x-3 text-white/80">
-            <ShieldCheckIcon className="h-4 w-4 text-green-400" />
-            <span className="text-xs">Suporte premium</span>
-          </div>
-          <div className="text-xs text-white/60">
-            Aproveite o suporte personalizado 1 a 1 para acelerar o aprendizado. Estamos aqui para ajudá-lo a alcançar seus objetivos com sucesso.
+          <div className="space-y-0.5">
+            <div className="flex items-center space-x-3 text-white/80">
+              <ShieldCheckIcon className="h-4 w-4 text-green-400" />
+              <span className="text-xs">Suporte premium</span>
+            </div>
+            <div className="text-xs text-white/60 pl-7">
+              Aproveite o suporte personalizado 1 a 1 para acelerar o aprendizado. Estamos aqui para ajudá-lo a alcançar seus objetivos com sucesso.
+            </div>
           </div>
         </div>
       )}
@@ -194,9 +198,24 @@ export default function PaymentPage() {
             <div className="flex flex-col max-w-lg w-full py-12 px-8">
               <ProdutoInfo produto={produto} />
 
-              <div className="mt-auto text-center pb-6">
-                <div className="text-white/40 text-xs">
-                  ©2025 Todos os direitos reservados · Aicrus Academy
+              <div className="flex-grow"></div>
+
+              <div className="space-y-3 mb-1">
+                <div className="text-white/50 text-[8px] sm:text-[9px] space-y-0.5">
+                  <p>
+                    Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <span className="underline cursor-pointer">Termos</span> e a <span className="underline cursor-pointer">Política de Privacidade</span>.
+                  </p>
+                  <p>
+                    Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
+                  </p>
+                  <p>
+                    Parcelamento sujeito a tarifa de 1,70% a.m.
+                  </p>
+                </div>
+                <div className="text-center">
+                  <div className="text-white/40 text-[9px] sm:text-[10px]">
+                    ©2025 Todos os direitos reservados · Aicrus Academy
+                  </div>
                 </div>
               </div>
             </div>
@@ -206,7 +225,7 @@ export default function PaymentPage() {
           <div className="w-full lg:w-1/2 min-h-screen lg:ml-[50%] bg-white">
             <div className="max-w-lg mx-auto py-4 sm:py-6 lg:py-12 px-3 sm:px-4 lg:px-8">
               {/* Mobile & Tablet View Header com informações do produto */}
-              <div className="lg:hidden space-y-4 mb-5 bg-[#0F2B1B] rounded-lg p-3 sm:p-4">
+              <div className="lg:hidden space-y-4 mb-5 bg-[#0F2B1B] rounded-lg p-4 sm:p-5">
                 <ProdutoInfo produto={produto} isCompact={true} />
               </div>
 
@@ -332,6 +351,22 @@ export default function PaymentPage() {
                     {selectedMethod === 'boleto' && <BoletoForm />}
                   </motion.div>
                 </AnimatePresence>
+              </div>
+              
+              {/* Mobile View - Texto legal */}
+              <div className="lg:hidden mt-6 space-y-0.5 text-gray-500 text-[8px] sm:text-[9px]">
+                <p>
+                  Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <span className="underline cursor-pointer">Termos</span> e a <span className="underline cursor-pointer">Política de Privacidade</span>.
+                </p>
+                <p>
+                  Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
+                </p>
+                <p>
+                  Parcelamento sujeito a tarifa de 1,70% a.m.
+                </p>
+                <p className="text-center text-gray-400 mt-1">
+                  ©2025 Todos os direitos reservados · Aicrus Academy
+                </p>
               </div>
             </div>
           </div>
