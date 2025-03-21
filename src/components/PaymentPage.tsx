@@ -209,7 +209,7 @@ export default function PaymentPage() {
                     Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
                   </p>
                   <p>
-                    Parcelamento sujeito a tarifa de 1,70% a.m.
+                    Parcelamento sujeito a tarifa de 3,02% a.m.
                   </p>
                 </div>
                 <div className="text-center">
@@ -362,7 +362,7 @@ export default function PaymentPage() {
                   Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
                 </p>
                 <p>
-                  Parcelamento sujeito a tarifa de 1,70% a.m.
+                  Parcelamento sujeito a tarifa de 3,02% a.m.
                 </p>
                 <p className="text-center text-gray-400 mt-1">
                   ©2025 Todos os direitos reservados · Aicrus Academy
