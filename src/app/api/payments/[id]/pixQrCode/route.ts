@@ -4,15 +4,17 @@ import { getPixQrCode } from "@/services/asaas/payment";
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  request: Request,
+  context: any
 ) {
   console.log('=== Iniciando GET /api/payments/[id]/pixQrCode ===');
-  console.log('Params recebidos:', params);
+  console.log('Params recebidos:', context.params);
   
   try {
+    const { id } = context.params;
+
     // Validar parâmetros
-    if (!params.id) {
+    if (!id) {
       console.error('ID do pagamento não fornecido');
       return NextResponse.json(
         { error: "ID do pagamento é obrigatório" },
@@ -20,7 +22,7 @@ export async function GET(
       );
     }
 
-    const paymentId = params.id;
+    const paymentId = id;
     console.log(`Processando solicitação de QR Code PIX para pagamento: ${paymentId}`);
 
     try {

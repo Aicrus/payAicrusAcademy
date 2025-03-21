@@ -4,10 +4,10 @@ import { ASAAS_CONFIG } from '@/config/asaas';
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: any
 ) {
   try {
-    const paymentId = params.id;
+    const paymentId = context.params.id;
 
     if (!paymentId) {
       return NextResponse.json(
