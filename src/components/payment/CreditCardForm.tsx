@@ -169,12 +169,6 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
       return;
     }
 
-    // Forçar pagamento à vista
-    if (selectedInstallment > 1) {
-      setError('No momento, aceitamos apenas pagamento à vista.');
-      return;
-    }
-
     setLoading(true);
     setError(null);
     onProcessingStart();
@@ -383,6 +377,117 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
             responseBody: errorData
           });
 
+          // Verifica se o erro é de token expirado/inválido
+          if (errorData.errors && errorData.errors[0]?.code === 'invalid_creditCard') {
+            console.log('Token do cartão expirado, gerando novo token...');
+            
+            // Tenta gerar um novo token
+            const responseNewToken = await fetch('/api/asaas/credit-card/tokenize', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(tokenizeData)
+            });
+
+            if (!responseNewToken.ok) {
+              throw new Error('Erro ao gerar novo token do cartão');
+            }
+
+            const newTokenData = await responseNewToken.json();
+            console.log('Novo token gerado com sucesso:', {
+              creditCardToken: newTokenData.creditCardToken,
+              creditCardNumber: newTokenData.creditCardNumber,
+              creditCardBrand: newTokenData.creditCardBrand
+            });
+
+            // Atualiza o token no banco de dados
+            try {
+              const updateCardResponse = await fetch('/api/cards/update', {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  usersAicrusAcademy: userData.id,
+                  idCustomerAsaas: userInfo.asaasId,
+                  creditCardToken: newTokenData.creditCardToken,
+                  creditCardNumber: newTokenData.creditCardNumber,
+                  creditCardBrand: newTokenData.creditCardBrand
+                })
+              });
+
+              if (!updateCardResponse.ok) {
+                console.error('Erro ao atualizar cartão:', await updateCardResponse.json());
+                throw new Error('Falha ao atualizar token do cartão no banco de dados');
+              }
+
+              console.log('Token do cartão atualizado com sucesso no banco de dados');
+            } catch (updateError) {
+              console.error('Erro ao atualizar token no banco:', updateError);
+              throw new Error('Falha ao atualizar token do cartão');
+            }
+
+            // Tenta o pagamento novamente com o novo token
+            const newPaymentData = {
+              ...paymentData,
+              creditCardToken: newTokenData.creditCardToken
+            };
+
+            const responseNewPayment = await fetch('/api/payments/tokenized', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(newPaymentData)
+            });
+
+            if (!responseNewPayment.ok) {
+              const newErrorData = await responseNewPayment.json();
+              let errorMessage = 'Erro ao processar pagamento';
+
+              if (newErrorData.error) {
+                errorMessage = newErrorData.error;
+              } else if (newErrorData.errors && newErrorData.errors.length > 0) {
+                errorMessage = newErrorData.errors[0].description;
+              }
+
+              setError(errorMessage);
+              setLoading(false);
+              return;
+            }
+
+            // Se chegou aqui, o pagamento foi bem sucedido com o novo token
+            const data: CreditCardPaymentResponse = await responseNewPayment.json();
+            // Continua o fluxo normal...
+            try {
+              await TransactionService.updateTransaction(transaction.id, {
+                idPayAsaas: data.paymentId
+              });
+              
+              console.log('ID do pagamento atualizado na transação:', data.paymentId);
+
+              if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(data.status)) {
+                try {
+                  await TransactionService.finalizeTransaction(transaction.id);
+                  console.log('Transação finalizada com sucesso');
+                } catch (error) {
+                  console.error('Erro ao finalizar transação:', error);
+                }
+              }
+
+              setPaymentStatus({
+                id: data.paymentId,
+                status: data.status as 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH'
+              });
+              
+              setLoading(false);
+              return;
+            } catch (updateError) {
+              console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
+            }
+          }
+
           let errorMessage = 'Erro ao processar pagamento';
 
           if (errorData.error) {
@@ -504,7 +609,9 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
                 <p className="mt-2 text-sm text-gray-600">
                   {valorCartao < 5 
                     ? 'Valor mínimo para pagamento com cartão é R$ 5,00'
-                    : 'Pagamento apenas à vista.'}
+                    : podeParcelar 
+                      ? `Parcele em até ${parcelas.length}x`
+                      : 'Valor disponível apenas para pagamento à vista'}
                 </p>
               </div>
 
@@ -562,7 +669,9 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
             <p className="mt-2 text-sm text-gray-600">
               {valorCartao < 5 
                 ? 'Valor mínimo para pagamento com cartão é R$ 5,00'
-                : 'Pagamento apenas à vista.'}
+                : podeParcelar 
+                  ? `Parcele em até ${parcelas.length}x`
+                  : 'Valor disponível apenas para pagamento à vista'}
             </p>
           </div>
 
@@ -574,13 +683,18 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
               <select
                 id="installment"
                 name="installment"
-                value={1}
-                onChange={(e) => setSelectedInstallment(1)}
+                value={selectedInstallment}
+                onChange={(e) => setSelectedInstallment(Number(e.target.value))}
                 className="block w-full pl-3 pr-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] appearance-none"
               >
-                <option value={1}>
-                  À vista - R$ {formatarMoeda(valorCartao)}
-                </option>
+                {[...parcelas].reverse().map(parcela => (
+                  <option key={parcela.numeroParcela} value={parcela.numeroParcela}>
+                    {parcela.numeroParcela === 1 
+                      ? `À vista - R$ ${formatarMoeda(parcela.valorParcela)}`
+                      : `${parcela.numeroParcela}x de R$ ${formatarMoeda(parcela.valorParcela)}*`
+                    }
+                  </option>
+                ))}
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                 <ChevronDownIcon className="h-4 w-4" />
