@@ -130,7 +130,7 @@ function ProdutoInfo({
           </div>
         </div>
       ) : (
-        <div className="mt-4 space-y-2 w-full">
+        <div className="mt-4 pt-4 space-y-2 w-full">
           <div className="space-y-0.5">
             <div className="flex items-center space-x-3 text-white/80">
               <ShieldCheckIcon className="h-4 w-4 text-green-400" />
