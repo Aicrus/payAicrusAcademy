@@ -10,7 +10,13 @@ function classNames(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-export default function PaymentForm() {
+interface PaymentFormProps {
+  discountApplied: boolean;
+  onProcessingStart: () => void;
+  onProcessingEnd: () => void;
+}
+
+export default function PaymentForm({ discountApplied, onProcessingStart, onProcessingEnd }: PaymentFormProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   return (
@@ -52,10 +58,18 @@ export default function PaymentForm() {
         </Tab.List>
         <Tab.Panels className="mt-6">
           <Tab.Panel>
-            <PixForm />
+            <PixForm 
+              discountApplied={discountApplied}
+              onProcessingStart={onProcessingStart}
+              onProcessingEnd={onProcessingEnd}
+            />
           </Tab.Panel>
           <Tab.Panel>
-            <BoletoForm />
+            <BoletoForm 
+              discountApplied={discountApplied}
+              onProcessingStart={onProcessingStart}
+              onProcessingEnd={onProcessingEnd}
+            />
           </Tab.Panel>
         </Tab.Panels>
       </Tab.Group>

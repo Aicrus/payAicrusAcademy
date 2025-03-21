@@ -135,8 +135,7 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
             try {
               console.log('Atualizando status da transação para:', statusData.status);
               await TransactionService.updateTransaction(String(currentTransaction.id), {
-                status: statusData.status,
-                dataHora: new Date().toISOString()
+                status: statusData.status
               });
               console.log('Status da transação atualizado com sucesso');
               
