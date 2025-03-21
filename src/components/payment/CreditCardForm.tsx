@@ -167,14 +167,11 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
     if (valorCartao < 5) {
       setError('O valor mínimo para pagamento com cartão é de R$ 5,00');
       return;
-    } else if (valorCartao < 10) {
-      setError('Pagamento apenas à vista.');
-      return;
-    } else if (valorCartao < 20) {
-      setError('Parcelado em até 2x.');
-      return;
-    } else if (valorCartao < 50) {
-      setError('Parcelado em até 3x.');
+    }
+
+    // Forçar pagamento à vista
+    if (selectedInstallment > 1) {
+      setError('No momento, aceitamos apenas pagamento à vista.');
       return;
     }
 
@@ -505,19 +502,9 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
               <div>
                 <h3 className="text-lg font-medium text-gray-900">Pagamento com Cartão</h3>
                 <p className="mt-2 text-sm text-gray-600">
-                  {(() => {
-                    if (valorCartao < 5) {
-                      return 'Valor mínimo para pagamento com cartão é R$ 5,00';
-                    } else if (valorCartao < 10) {
-                      return 'Pagamento apenas à vista.';
-                    } else if (valorCartao < 20) {
-                      return 'Parcelado em até 2x.';
-                    } else if (valorCartao < 50) {
-                      return 'Parcelado em até 3x.';
-                    } else {
-                      return 'Parcelado em até 12x.';
-                    }
-                  })()}
+                  {valorCartao < 5 
+                    ? 'Valor mínimo para pagamento com cartão é R$ 5,00'
+                    : 'Pagamento apenas à vista.'}
                 </p>
               </div>
 
@@ -573,19 +560,9 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
           <div>
             <h3 className="text-lg font-medium text-gray-900">Pagamento com Cartão</h3>
             <p className="mt-2 text-sm text-gray-600">
-              {(() => {
-                if (valorCartao < 5) {
-                  return 'Valor mínimo para pagamento com cartão é R$ 5,00';
-                } else if (valorCartao < 10) {
-                  return 'Pagamento apenas à vista.';
-                } else if (valorCartao < 20) {
-                  return 'Parcelado em até 2x.';
-                } else if (valorCartao < 50) {
-                  return 'Parcelado em até 3x.';
-                } else {
-                  return 'Parcelado em até 12x.';
-                }
-              })()}
+              {valorCartao < 5 
+                ? 'Valor mínimo para pagamento com cartão é R$ 5,00'
+                : 'Pagamento apenas à vista.'}
             </p>
           </div>
 
@@ -597,24 +574,13 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
               <select
                 id="installment"
                 name="installment"
-                value={selectedInstallment}
-                onChange={(e) => setSelectedInstallment(Number(e.target.value))}
+                value={1}
+                onChange={(e) => setSelectedInstallment(1)}
                 className="block w-full pl-3 pr-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] appearance-none"
               >
-                {podeParcelar ? (
-                  parcelas.slice().reverse().map((parcela) => (
-                    <option key={parcela.numeroParcela} value={parcela.numeroParcela}>
-                      {parcela.numeroParcela === 1 
-                        ? `À vista - R$ ${formatarMoeda(parcela.valorParcela)}` 
-                        : `${parcela.numeroParcela}x de R$ ${formatarMoeda(parcela.valorParcela)}`}
-                      {parcela.numeroParcela > 1 ? '*' : ''}
-                    </option>
-                  ))
-                ) : (
-                  <option value={1}>
-                    À vista - R$ {formatarMoeda(valorCartao)}
-                  </option>
-                )}
+                <option value={1}>
+                  À vista - R$ {formatarMoeda(valorCartao)}
+                </option>
               </select>
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                 <ChevronDownIcon className="h-4 w-4" />
