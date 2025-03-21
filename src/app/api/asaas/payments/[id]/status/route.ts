@@ -3,10 +3,10 @@ import { checkPaymentStatus } from '@/services/asaas/payment';
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params;
+    const { id } = params;
     console.log('Verificando status do pagamento:', id);
 
     const status = await checkPaymentStatus(id);

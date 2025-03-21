@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
-interface RequestContext {
-  params: {
-    id: string;
-  };
-}
-
 export async function GET(
   request: Request,
-  context: RequestContext
+  { params }: { params: { id: string } }
 ) {
   try {
-    const cardId = context.params.id;
+    const cardId = params.id;
 
     if (!cardId) {
       return NextResponse.json(

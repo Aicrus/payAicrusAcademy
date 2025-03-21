@@ -4,10 +4,10 @@ import { safeLog } from '@/utils/logger';
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ userId: string }> }
+  { params }: { params: { userId: string } }
 ) {
   try {
-    const { userId } = await params;
+    const { userId } = params;
 
     if (!userId) {
       return NextResponse.json(
