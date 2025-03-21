@@ -403,6 +403,14 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
 
             // Atualiza o token no banco de dados
             try {
+              console.log('Tentando atualizar token no banco de dados:', {
+                usersAicrusAcademy: userData.id,
+                idCustomerAsaas: userInfo.asaasId,
+                creditCardToken: '****',
+                creditCardNumber: '****' + newTokenData.creditCardNumber.slice(-4),
+                creditCardBrand: newTokenData.creditCardBrand
+              });
+
               const updateCardResponse = await fetch('/api/cards/update', {
                 method: 'PUT',
                 headers: {
@@ -417,12 +425,21 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
                 })
               });
 
+              const updateResponse = await updateCardResponse.json();
+
               if (!updateCardResponse.ok) {
-                console.error('Erro ao atualizar cartão:', await updateCardResponse.json());
+                console.error('Erro detalhado ao atualizar cartão:', {
+                  status: updateCardResponse.status,
+                  statusText: updateCardResponse.statusText,
+                  response: updateResponse
+                });
                 throw new Error('Falha ao atualizar token do cartão no banco de dados');
               }
 
-              console.log('Token do cartão atualizado com sucesso no banco de dados');
+              console.log('Token do cartão atualizado com sucesso:', {
+                cardId: updateResponse.id,
+                updatedAt: updateResponse.updatedAt
+              });
             } catch (updateError) {
               console.error('Erro ao atualizar token no banco:', updateError);
               throw new Error('Falha ao atualizar token do cartão');
