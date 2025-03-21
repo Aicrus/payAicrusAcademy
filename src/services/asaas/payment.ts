@@ -251,63 +251,113 @@ export async function createAsaasPayment(data: AsaasPaymentData): Promise<AsaasP
   try {
     console.log('Iniciando criação de pagamento...', {
       customer: data.customer,
-      value: data.value
+      billingType: data.billingType,
+      value: data.value,
+      dueDate: data.dueDate?.substring(0, 10)
     });
+
+    // Verificar se os dados necessários estão presentes
+    if (!data.customer) {
+      throw new Error('ID do cliente (customer) é obrigatório');
+    }
+
+    if (!data.value || data.value <= 0) {
+      throw new Error('Valor deve ser maior que zero');
+    }
+
+    if (!data.dueDate) {
+      throw new Error('Data de vencimento é obrigatória');
+    }
+
+    // Garantir que o valor tenha no máximo 2 casas decimais
+    const valueFormatted = Number(Number(data.value).toFixed(2));
 
     const url = `${ASAAS_CONFIG.API_URL}/payments`;
     console.log('URL da API:', url);
 
-    const headers = ASAAS_CONFIG.getHeaders();
-    console.log('Headers configurados:', {
-      ...headers,
-      access_token: headers.access_token ? '***' : undefined
-    });
+    // Obter os headers de forma segura
+    let headers;
+    try {
+      headers = ASAAS_CONFIG.getHeaders();
+      console.log('Headers configurados:', {
+        contentType: headers['Content-Type'],
+        accept: headers['Accept'],
+        hasAccessToken: !!headers['access_token'],
+        tokenPrefix: headers['access_token'] ? headers['access_token'].substring(0, 5) : undefined
+      });
+    } catch (headerError) {
+      console.error('Erro ao obter headers:', headerError);
+      throw new Error('Erro de configuração: não foi possível obter headers da API');
+    }
 
     // Adicionar configuração para desativar notificações
     const paymentData = {
       ...data,
-      postalService: false
+      value: valueFormatted,
+      postalService: false,
+      // Garantir que a data de vencimento esteja no formato correto (YYYY-MM-DD)
+      dueDate: data.dueDate.split('T')[0]
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(paymentData),
-      cache: 'no-store'
-    });
+    console.log('Dados do pagamento a serem enviados:', paymentData);
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Erro na resposta:', {
-        status: response.status,
-        body: errorText
-      });
-      throw new Error(`Erro na API Asaas: ${response.status} - ${errorText || response.statusText}`);
-    }
-
-    const responseText = await response.text();
-      
-    if (!responseText || responseText.trim() === '') {
-      console.error('Resposta vazia recebida do servidor');
-      throw new Error('Resposta vazia do servidor Asaas');
-    }
-
-    let responseData;
     try {
-      responseData = JSON.parse(responseText);
-    } catch (e) {
-      console.error('Erro ao processar resposta da API:', e);
-      throw new Error('Erro ao processar resposta do servidor');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(paymentData),
+        cache: 'no-store'
+      });
+
+      console.log('Status da resposta:', response.status, response.statusText);
+
+      // Obter o corpo da resposta como texto para melhor diagnóstico
+      const responseText = await response.text();
+      console.log('Resposta recebida (parcial):', responseText.substring(0, 200));
+      
+      if (!responseText || responseText.trim() === '') {
+        console.error('Resposta vazia recebida do servidor');
+        throw new Error('Resposta vazia do servidor Asaas');
+      }
+
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Erro ao processar resposta JSON:', parseError);
+        throw new Error('Resposta inválida do servidor: ' + responseText.substring(0, 100));
+      }
+
+      if (!response.ok) {
+        console.error('Erro na resposta do Asaas:', {
+          status: response.status,
+          statusText: response.statusText,
+          data: responseData
+        });
+        
+        let errorMessage = 'Erro ao criar pagamento';
+        
+        if (responseData.errors && Array.isArray(responseData.errors) && responseData.errors.length > 0) {
+          errorMessage = responseData.errors.map((e: any) => e.description).join(', ');
+        } else if (responseData.error) {
+          errorMessage = responseData.error;
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      console.log('Pagamento criado com sucesso:', {
+        id: responseData.id,
+        status: responseData.status
+      });
+
+      return responseData;
+    } catch (fetchError) {
+      console.error('Erro na requisição de criação de pagamento:', fetchError);
+      throw fetchError;
     }
-
-    console.log('Pagamento criado com sucesso:', {
-      id: responseData.id,
-      status: responseData.status
-    });
-
-    return responseData;
   } catch (error) {
-    console.error('Erro ao criar pagamento:', error);
+    console.error('Erro detalhado ao criar pagamento:', error);
     throw error;
   }
 }
@@ -626,16 +676,27 @@ export interface PixQrCodeResponse {
 
 export async function getPixQrCode(paymentId: string): Promise<PixQrCodeResponse> {
   try {
-    console.log('Obtendo QR Code para pagamento PIX...', { paymentId });
-
+    console.log(`Iniciando obtenção do QR Code PIX para pagamento ${paymentId}`);
+    
+    if (!paymentId) {
+      throw new Error('ID do pagamento é obrigatório para gerar QR Code PIX');
+    }
+    
     const url = `${ASAAS_CONFIG.API_URL}/payments/${paymentId}/pixQrCode`;
-    console.log('URL da API:', url);
-
-    const headers = ASAAS_CONFIG.getHeaders();
-    console.log('Headers configurados:', {
-      ...headers,
-      access_token: headers.access_token ? '***' : undefined
-    });
+    console.log('URL da API para QR Code:', url);
+    
+    let headers;
+    try {
+      headers = ASAAS_CONFIG.getHeaders();
+      console.log('Headers configurados para QR Code:', {
+        contentType: headers['Content-Type'],
+        accept: headers['Accept'],
+        hasAccessToken: !!headers['access_token']
+      });
+    } catch (headerError) {
+      console.error('Erro ao obter headers para QR Code:', headerError);
+      throw new Error('Erro de configuração: não foi possível obter headers da API');
+    }
 
     const response = await fetch(url, {
       method: 'GET',
@@ -643,38 +704,53 @@ export async function getPixQrCode(paymentId: string): Promise<PixQrCodeResponse
       cache: 'no-store'
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Erro na resposta:', {
-        status: response.status,
-        body: errorText
-      });
-      throw new Error(`Erro na API Asaas: ${response.status} - ${errorText || response.statusText}`);
-    }
-
+    console.log('Status da resposta do QR Code:', response.status, response.statusText);
+    
+    // Obter o corpo da resposta como texto para melhor diagnóstico
     const responseText = await response.text();
-      
+    console.log('Resposta do QR Code recebida (parcial):', 
+      responseText ? responseText.substring(0, 200) : 'Resposta vazia');
+    
     if (!responseText || responseText.trim() === '') {
-      console.error('Resposta vazia recebida do servidor');
-      throw new Error('Resposta vazia do servidor Asaas');
+      console.error('Resposta vazia recebida do servidor para QR Code');
+      throw new Error('Resposta vazia do servidor Asaas para QR Code');
     }
 
     let responseData;
     try {
       responseData = JSON.parse(responseText);
-    } catch (e) {
-      console.error('Erro ao processar resposta da API:', e);
-      throw new Error('Erro ao processar resposta do servidor');
+    } catch (parseError) {
+      console.error('Erro ao processar resposta JSON do QR Code:', parseError);
+      throw new Error('Resposta inválida do servidor para QR Code: ' + responseText.substring(0, 100));
     }
 
-    return {
-      success: true,
-      encodedImage: responseData.encodedImage,
-      payload: responseData.payload,
+    if (!response.ok) {
+      console.error('Erro na resposta do Asaas para QR Code:', {
+        status: response.status,
+        statusText: response.statusText,
+        data: responseData
+      });
+      
+      let errorMessage = 'Erro ao obter QR Code PIX';
+      
+      if (responseData.errors && Array.isArray(responseData.errors) && responseData.errors.length > 0) {
+        errorMessage = responseData.errors.map((e: any) => e.description).join(', ');
+      } else if (responseData.error) {
+        errorMessage = responseData.error;
+      }
+      
+      throw new Error(errorMessage);
+    }
+
+    console.log('QR Code PIX obtido com sucesso', {
+      encodedImage: responseData.encodedImage ? 'presente' : 'ausente',
+      payload: responseData.payload ? 'presente' : 'ausente',
       expirationDate: responseData.expirationDate
-    };
+    });
+
+    return responseData;
   } catch (error) {
-    console.error('Erro ao obter QR Code PIX:', error);
+    console.error('Erro detalhado ao obter QR Code PIX:', error);
     throw error;
   }
 } 

@@ -414,13 +414,48 @@ export default function PixForm() {
         cache: 'no-store'
       });
 
-      if (!pixQrCodeResponse.ok) {
-        const errorData = await pixQrCodeResponse.json();
-        console.error('Erro ao obter QR code PIX:', errorData);
-        throw new Error(errorData.error || 'Falha ao gerar QR Code PIX');
+      console.log('Resposta da API QR Code:', {
+        status: pixQrCodeResponse.status,
+        statusText: pixQrCodeResponse.statusText
+      });
+
+      // Obter o texto da resposta antes de tentar processar como JSON
+      let responseText;
+      try {
+        responseText = await pixQrCodeResponse.text();
+        console.log('Resposta do QR Code (primeiros 100 caracteres):', 
+          responseText ? responseText.substring(0, 100) : 'Resposta vazia');
+      } catch (textError) {
+        console.error('Erro ao ler texto da resposta:', textError);
+        throw new Error('Erro ao ler resposta do servidor para QR Code');
       }
 
-      const pixQrCodeData = await pixQrCodeResponse.json();
+      if (!responseText || responseText.trim() === '') {
+        console.error('Resposta vazia recebida para QR Code PIX');
+        throw new Error('Resposta vazia do servidor para QR Code PIX');
+      }
+
+      // Processar a resposta JSON
+      let pixQrCodeData;
+      try {
+        pixQrCodeData = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error('Erro ao processar JSON da resposta QR Code:', jsonError);
+        console.error('Conteúdo da resposta:', responseText.substring(0, 200));
+        throw new Error('Resposta inválida do servidor para QR Code');
+      }
+
+      if (!pixQrCodeResponse.ok) {
+        console.error('Erro ao obter QR code PIX:', pixQrCodeData);
+        throw new Error(pixQrCodeData.error || pixQrCodeData.message || 'Falha ao gerar QR Code PIX');
+      }
+
+      if (!pixQrCodeData.encodedImage || !pixQrCodeData.payload) {
+        console.error('Dados incompletos do QR Code PIX:', pixQrCodeData);
+        throw new Error('QR Code PIX incompleto ou inválido');
+      }
+
+      console.log('QR Code PIX obtido com sucesso para pagamento:', paymentData.id);
       
       // Configurar os dados do PIX com as informações obtidas
       setPixData({
