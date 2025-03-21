@@ -402,26 +402,6 @@ export default function PaymentPage() {
                   cupomError={cupomError}
                   showCouponField={!isProcessing && !paymentGenerated}
                 />
-                
-                {/* Campo de cupom - Versão Mobile */}
-                <div className="mt-2 border-t border-white/10 pt-3">
-                  <div className="flex space-x-2">
-                    <input 
-                      type="text" 
-                      placeholder="Cupom de desconto" 
-                      value={couponCode}
-                      onChange={(e) => setCouponCode(e.target.value)}
-                      className="flex-1 bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 placeholder-white/40"
-                    />
-                    <button 
-                      type="button"
-                      onClick={handleApplyCoupon}
-                      className="bg-white/10 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/20 transition-colors"
-                    >
-                      Aplicar
-                    </button>
-                  </div>
-                </div>
               </div>
 
               <div className="space-y-4 sm:space-y-5 lg:space-y-6 relative">
