@@ -598,12 +598,15 @@ export default function CreditCardForm() {
                 {podeParcelar ? (
                   parcelas.map((parcela) => (
                     <option key={parcela.numeroParcela} value={parcela.numeroParcela}>
-                      {parcela.numeroParcela} x de R$ {parcela.valorParcela.toFixed(2).replace('.', ',')}
+                      {parcela.numeroParcela === 1 
+                        ? `À vista - R$ ${parcela.valorParcela.toFixed(2).replace('.', ',')}` 
+                        : `${parcela.numeroParcela}x de R$ ${parcela.valorParcela.toFixed(2).replace('.', ',')}`}
+                      {parcela.numeroParcela > 1 ? '*' : ''}
                     </option>
                   ))
                 ) : (
                   <option value={1}>
-                    1 x de R$ {(produto?.valor || 0).toFixed(2).replace('.', ',')}
+                    À vista - R$ {(produto?.valor || 0).toFixed(2).replace('.', ',')}
                   </option>
                 )}
               </select>
