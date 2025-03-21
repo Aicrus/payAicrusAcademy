@@ -16,10 +16,28 @@ import { ProdutoProvider } from '@/contexts/ProdutoContext';
 type PaymentMethod = 'credit-card' | 'pix' | 'boleto';
 
 // Componente que renderiza as informações do produto
-function ProdutoInfo({ produto, isCompact = false }: { produto: Produto, isCompact?: boolean }) {
+function ProdutoInfo({ 
+  produto, 
+  isCompact = false,
+  couponCode,
+  setCouponCode,
+  discountApplied,
+  valorExibido,
+  onApplyCoupon,
+  formatarValor
+}: { 
+  produto: Produto, 
+  isCompact?: boolean,
+  couponCode: string,
+  setCouponCode: (code: string) => void,
+  discountApplied: boolean,
+  valorExibido: number,
+  onApplyCoupon: () => void,
+  formatarValor: (valor: number) => string
+}) {
   return (
     <>
-      <div className={isCompact ? "flex justify-center mb-3" : "mb-6"}>
+      <div className={isCompact ? "flex justify-center mb-3" : "mb-4"}>
         <Image
           src={produto.img}
           alt={produto.nomeProduto}
@@ -29,8 +47,8 @@ function ProdutoInfo({ produto, isCompact = false }: { produto: Produto, isCompa
         />
       </div>
 
-      <div className={isCompact ? "mb-2" : "mt-6"}>
-        <h2 className={`text-white/80 ${isCompact ? "text-sm sm:text-base mb-2" : "text-xs mb-2"}`}>
+      <div className={isCompact ? "mb-2" : "mt-4"}>
+        <h2 className={`text-white/80 ${isCompact ? "text-sm sm:text-base mb-2" : "text-xs mb-1.5"}`}>
           Assinar {produto.nomeProduto}
         </h2>
         <div className="flex flex-col">
@@ -42,9 +60,9 @@ function ProdutoInfo({ produto, isCompact = false }: { produto: Produto, isCompa
               {produto.porcentagemDesconto}
             </span>
           </div>
-          <div className="flex items-baseline space-x-2 mt-2">
+          <div className="flex items-baseline space-x-2 mt-1.5">
             <span className={`text-white font-bold ${isCompact ? "text-2xl sm:text-3xl" : "text-3xl"}`}>
-              R$ {produto.valor.toFixed(2)}
+              R$ {valorExibido.toFixed(2)}
             </span>
             <span className={`text-white/60 ${isCompact ? "text-sm sm:text-base" : "text-sm"}`}>
               {produto.prazo}
@@ -53,23 +71,52 @@ function ProdutoInfo({ produto, isCompact = false }: { produto: Produto, isCompa
         </div>
       </div>
 
-      <div className={`${isCompact ? "bg-white/5 rounded-md p-3 sm:p-4 mt-3" : "mt-6 bg-white/5 rounded-lg p-5"} w-full`}>
-        <div className={`${isCompact ? "space-y-1.5" : "space-y-3"}`}>
-          <div className={`flex justify-between text-white/80 ${isCompact ? "text-sm sm:text-base" : "text-sm"}`}>
+      <div className={`${isCompact ? "bg-white/5 rounded-md p-3 sm:p-4 mt-3" : "mt-4 bg-white/5 rounded-lg p-4"} w-full`}>
+        <div className={`${isCompact ? "space-y-1.5" : "space-y-2"}`}>
+          <div className={`flex justify-between text-white/80 ${isCompact ? "text-sm sm:text-base" : "text-xs"}`}>
             <span>Acesso {produto.prazo}</span>
             <span>R$ {produto.valor.toFixed(2)}</span>
           </div>
-          <div className={`${isCompact ? "text-xs sm:text-sm" : "text-xs"} text-white/60`}>
+          <div className={`${isCompact ? "text-xs sm:text-sm" : "text-[10px]"} text-white/60`}>
             <span>Pagamento anual</span>
           </div>
-          <div className={`border-t border-white/10 ${isCompact ? "pt-1.5 mt-1.5" : "pt-3 mt-3"}`}>
-            <div className={`flex justify-between ${isCompact ? "text-sm sm:text-base" : "text-sm"} text-white`}>
+          <div className={`border-t border-white/10 ${isCompact ? "pt-1.5 mt-1.5" : "pt-2 mt-2"}`}>
+            <div className={`flex justify-between ${isCompact ? "text-sm sm:text-base" : "text-xs"} text-white`}>
               <span>Valor total</span>
-              <span>R$ {produto.valor.toFixed(2)}</span>
+              <span>
+                {discountApplied && (
+                  <span className="line-through text-white/60 mr-2 text-[10px]">
+                    R$ {produto.valor.toFixed(2)}
+                  </span>
+                )}
+                R$ {valorExibido.toFixed(2)}
+              </span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Campo de cupom abaixo do bloco de valor total */}
+      {!isCompact && (
+        <div className="mt-3 w-full">
+          <div className="flex space-x-2">
+            <input 
+              type="text" 
+              placeholder="Cupom de desconto" 
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              className="flex-1 bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 placeholder-white/40"
+            />
+            <button 
+              type="button"
+              onClick={onApplyCoupon}
+              className="bg-white/10 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/20 transition-colors"
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      )}
 
       {isCompact ? (
         <div className="grid grid-cols-2 gap-3 text-white/80 mt-4">
@@ -83,7 +130,7 @@ function ProdutoInfo({ produto, isCompact = false }: { produto: Produto, isCompa
           </div>
         </div>
       ) : (
-        <div className="mt-6 space-y-3 w-full">
+        <div className="mt-4 space-y-2 w-full">
           <div className="space-y-0.5">
             <div className="flex items-center space-x-3 text-white/80">
               <ShieldCheckIcon className="h-4 w-4 text-green-400" />
@@ -111,6 +158,9 @@ function ProdutoInfo({ produto, isCompact = false }: { produto: Produto, isCompa
 export default function PaymentPage() {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('credit-card');
   const [produto, setProduto] = useState<Produto | null>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [discountApplied, setDiscountApplied] = useState(false);
+  const [valorComDesconto, setValorComDesconto] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchProduto = async () => {
@@ -185,6 +235,30 @@ export default function PaymentPage() {
     };
   }, [produto?.id]); // Adiciona produto.id como dependência
 
+  // Função para aplicar o cupom de desconto
+  const handleApplyCoupon = () => {
+    if (!couponCode.trim() || !produto) return;
+    
+    // Simulando um desconto de 10% para o cupom "AICRUS10"
+    if (couponCode.toUpperCase() === 'AICRUS10') {
+      const discountValue = produto.valor * 0.1; // 10% de desconto
+      setValorComDesconto(produto.valor - discountValue);
+      setDiscountApplied(true);
+    } else {
+      alert('Cupom inválido');
+      setDiscountApplied(false);
+      setValorComDesconto(null);
+    }
+  };
+
+  // Formatação do valor para exibição
+  const formatarValor = (valor: number) => {
+    return valor.toFixed(2).replace('.', ',');
+  };
+
+  // Valor que será exibido (com ou sem desconto)
+  const valorExibido = valorComDesconto !== null ? valorComDesconto : (produto?.valor || 0);
+
   if (!produto) {
     return <div className="min-h-screen flex items-center justify-center bg-white text-gray-500">Carregando...</div>;
   }
@@ -195,25 +269,33 @@ export default function PaymentPage() {
         <div className="min-h-screen flex flex-col lg:flex-row">
           {/* Left side - Visível apenas em desktop (lg) */}
           <div className="hidden lg:flex lg:w-1/2 h-screen lg:fixed lg:top-0 lg:left-0 bg-[#0F2B1B] justify-center overflow-y-auto">
-            <div className="flex flex-col max-w-lg w-full py-12 px-8">
-              <ProdutoInfo produto={produto} />
+            <div className="flex flex-col max-w-lg w-full py-8 px-8">
+              <ProdutoInfo 
+                produto={produto} 
+                couponCode={couponCode}
+                setCouponCode={setCouponCode}
+                discountApplied={discountApplied}
+                valorExibido={valorExibido}
+                onApplyCoupon={handleApplyCoupon}
+                formatarValor={formatarValor}
+              />
 
               <div className="flex-grow"></div>
 
-              <div className="space-y-3 mb-1">
-                <div className="text-white/50 text-[8px] sm:text-[9px] space-y-0.5">
+              <div className="space-y-3 mb-1 mt-[-30px]">
+                <div className="text-white/60 text-[9px] sm:text-[10px] space-y-0.5">
                   <p>
                     Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <a href="/termos" className="underline font-bold cursor-pointer hover:text-white/80 transition-colors">Termos</a> e a <a href="/privacidade" className="underline font-bold cursor-pointer hover:text-white/80 transition-colors">Política de Privacidade</a>.
                   </p>
                   <p>
                     Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
                   </p>
-                  <p>
-                    Parcelamento sujeito a tarifa de 3,02% a.m.
+                  <p className="text-[9px] sm:text-[10px] text-white/70">
+                    Parcelamento sujeito a tarifa de <span className="font-bold">3,02% a.m.</span>
                   </p>
                 </div>
-                <div className="text-center">
-                  <div className="text-white/40 text-[9px] sm:text-[10px]">
+                <div className="text-center mt-1">
+                  <div className="text-white/50 text-[11px] sm:text-[12px] font-medium">
                     ©2025 Todos os direitos reservados · Aicrus Academy
                   </div>
                 </div>
@@ -226,7 +308,16 @@ export default function PaymentPage() {
             <div className="max-w-lg mx-auto py-4 sm:py-6 lg:py-12 px-3 sm:px-4 lg:px-8">
               {/* Mobile & Tablet View Header com informações do produto */}
               <div className="lg:hidden space-y-4 mb-5 bg-[#0F2B1B] rounded-lg p-4 sm:p-5">
-                <ProdutoInfo produto={produto} isCompact={true} />
+                <ProdutoInfo 
+                  produto={produto}
+                  isCompact={true}
+                  couponCode={couponCode}
+                  setCouponCode={setCouponCode}
+                  discountApplied={discountApplied}
+                  valorExibido={valorExibido}
+                  onApplyCoupon={handleApplyCoupon}
+                  formatarValor={formatarValor}
+                />
               </div>
 
               <div className="space-y-4 sm:space-y-5 lg:space-y-6">
@@ -354,17 +445,49 @@ export default function PaymentPage() {
               </div>
               
               {/* Mobile View - Texto legal */}
-              <div className="lg:hidden mt-6 space-y-0.5 text-gray-500 text-[8px] sm:text-[9px]">
+              <div className="lg:hidden mt-2 space-y-0.5 text-gray-500 text-[9px] sm:text-[10px]">
                 <p>
                   Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <a href="/termos" className="underline font-bold cursor-pointer hover:text-gray-700 transition-colors">Termos</a> e a <a href="/privacidade" className="underline font-bold cursor-pointer hover:text-gray-700 transition-colors">Política de Privacidade</a>.
                 </p>
                 <p>
                   Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
                 </p>
-                <p>
-                  Parcelamento sujeito a tarifa de 3,02% a.m.
+                <p className="text-[9px] sm:text-[10px] text-gray-700">
+                  Parcelamento sujeito a tarifa de <span className="font-bold">3,02% a.m.</span>
                 </p>
-                <p className="text-center text-gray-400 mt-1">
+                
+                {/* Campo de cupom */}
+                <div className="mt-3 mb-2 border-t border-gray-100 pt-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-gray-700 font-medium text-sm">Valor total</p>
+                    <p className="text-gray-900 font-bold text-sm">
+                      {discountApplied && (
+                        <span className="line-through text-gray-500 mr-2">
+                          R$ {formatarValor(produto?.valor || 0)}
+                        </span>
+                      )}
+                      R$ {formatarValor(valorExibido)}
+                    </p>
+                  </div>
+                  <div className="flex space-x-2">
+                    <input 
+                      type="text" 
+                      placeholder="Cupom de desconto" 
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-[#0F2B1B] focus:border-[#0F2B1B]"
+                    />
+                    <button 
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      className="bg-[#0F2B1B] text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-[#1a4a30] transition-colors"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                </div>
+                
+                <p className="text-center text-gray-500 mt-1.5 text-[11px] sm:text-[12px] font-medium">
                   ©2025 Todos os direitos reservados · Aicrus Academy
                 </p>
               </div>
