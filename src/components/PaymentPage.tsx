@@ -24,7 +24,10 @@ function ProdutoInfo({
   discountApplied,
   valorExibido,
   onApplyCoupon,
-  formatarValor
+  onRemoveCoupon,
+  formatarValor,
+  cupomError,
+  showCouponField
 }: { 
   produto: Produto, 
   isCompact?: boolean,
@@ -33,8 +36,16 @@ function ProdutoInfo({
   discountApplied: boolean,
   valorExibido: number,
   onApplyCoupon: () => void,
-  formatarValor: (valor: number) => string
+  onRemoveCoupon: () => void,
+  formatarValor: (valor: number) => string,
+  cupomError: string,
+  showCouponField: boolean
 }) {
+  // Função para verificar se deve mostrar o campo de cupom
+  const shouldShowCouponField = () => {
+    return showCouponField && produto.valorDesconto && produto.valorDesconto > 0;
+  };
+
   return (
     <>
       <div className={isCompact ? "flex justify-center mb-3" : "mb-4"}>
@@ -52,17 +63,20 @@ function ProdutoInfo({
           Assinar {produto.nomeProduto}
         </h2>
         <div className="flex flex-col">
-          <div className="flex items-baseline space-x-2">
-            <span className={`text-white/60 line-through ${isCompact ? "text-base sm:text-lg" : "text-xl"}`}>
-              R$ {produto.valorAntigo.toFixed(2)}
+          <div className="flex items-center gap-2">
+            <span className={`text-white/60 ${isCompact ? "text-sm sm:text-base" : "text-sm"}`}>
+              de
             </span>
-            <span className={`bg-green-500/20 text-green-400 ${isCompact ? "text-xs sm:text-sm px-1.5 py-0.5" : "text-xs px-2 py-0.5"} rounded`}>
-              {produto.porcentagemDesconto}
+            <span className={`text-white/60 line-through ${isCompact ? "text-base sm:text-lg" : "text-xl"}`}>
+              R$ {formatarValor(produto.valorAntigo)}
+            </span>
+            <span className={`text-white/60 ${isCompact ? "text-sm sm:text-base" : "text-sm"}`}>
+              por
             </span>
           </div>
-          <div className="flex items-baseline space-x-2 mt-1.5">
+          <div className="flex items-baseline gap-2">
             <span className={`text-white font-bold ${isCompact ? "text-2xl sm:text-3xl" : "text-3xl"}`}>
-              R$ {valorExibido.toFixed(2)}
+              R$ {formatarValor(discountApplied ? produto.valorDesconto : produto.valor)}
             </span>
             <span className={`text-white/60 ${isCompact ? "text-sm sm:text-base" : "text-sm"}`}>
               {produto.prazo}
@@ -75,45 +89,71 @@ function ProdutoInfo({
         <div className={`${isCompact ? "space-y-1.5" : "space-y-2"}`}>
           <div className={`flex justify-between text-white/80 ${isCompact ? "text-sm sm:text-base" : "text-xs"}`}>
             <span>Acesso {produto.prazo}</span>
-            <span>R$ {produto.valor.toFixed(2)}</span>
+            <span>R$ {formatarValor(produto.valor)}</span>
           </div>
           <div className={`${isCompact ? "text-xs sm:text-sm" : "text-[10px]"} text-white/60`}>
             <span>Pagamento anual</span>
           </div>
+          {discountApplied && (
+            <div className={`flex justify-between text-green-400 ${isCompact ? "text-sm sm:text-base" : "text-xs"}`}>
+              <span>Desconto do cupom</span>
+              <span>-R$ {formatarValor(produto.valor - produto.valorDesconto)}</span>
+            </div>
+          )}
           <div className={`border-t border-white/10 ${isCompact ? "pt-1.5 mt-1.5" : "pt-2 mt-2"}`}>
             <div className={`flex justify-between ${isCompact ? "text-sm sm:text-base" : "text-xs"} text-white`}>
               <span>Valor total</span>
-              <span>
-                {discountApplied && (
-                  <span className="line-through text-white/60 mr-2 text-[10px]">
-                    R$ {produto.valor.toFixed(2)}
-                  </span>
-                )}
-                R$ {valorExibido.toFixed(2)}
-              </span>
+              <span>R$ {formatarValor(discountApplied ? produto.valorDesconto : produto.valor)}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Campo de cupom abaixo do bloco de valor total */}
-      {!isCompact && (
+      {shouldShowCouponField() && (
         <div className="mt-3 w-full">
           <div className="flex space-x-2">
-            <input 
-              type="text" 
-              placeholder="Cupom de desconto" 
-              value={couponCode}
-              onChange={(e) => setCouponCode(e.target.value)}
-              className="flex-1 bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 placeholder-white/40"
-            />
-            <button 
-              type="button"
-              onClick={onApplyCoupon}
-              className="bg-white/10 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/20 transition-colors"
-            >
-              Aplicar
-            </button>
+            {!discountApplied ? (
+              <>
+                <div className="flex-1 flex flex-col">
+                  <input 
+                    type="text" 
+                    placeholder="Cupom de desconto" 
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value)}
+                    className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 placeholder-white/40"
+                  />
+                  {cupomError && (
+                    <p className="text-red-400 text-[11px] mt-1 ml-1">{cupomError}</p>
+                  )}
+                </div>
+                <div className="flex-shrink-0">
+                  <button 
+                    type="button"
+                    onClick={onApplyCoupon}
+                    className="h-[30px] bg-white/10 text-white text-xs font-medium px-3 rounded-lg hover:bg-white/20 transition-colors whitespace-nowrap"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="flex w-full">
+                <input 
+                  type="text" 
+                  value={couponCode}
+                  disabled
+                  className="flex-1 bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs"
+                />
+                <button 
+                  type="button"
+                  onClick={onRemoveCoupon}
+                  className="bg-white/10 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/20 transition-colors ml-2"
+                >
+                  Retirar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -161,6 +201,9 @@ export default function PaymentPage() {
   const [couponCode, setCouponCode] = useState('');
   const [discountApplied, setDiscountApplied] = useState(false);
   const [valorComDesconto, setValorComDesconto] = useState<number | null>(null);
+  const [cupomError, setCupomError] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentGenerated, setPaymentGenerated] = useState(false);
 
   useEffect(() => {
     const fetchProduto = async () => {
@@ -239,25 +282,60 @@ export default function PaymentPage() {
   const handleApplyCoupon = () => {
     if (!couponCode.trim() || !produto) return;
     
-    // Simulando um desconto de 10% para o cupom "AICRUS10"
-    if (couponCode.toUpperCase() === 'AICRUS10') {
-      const discountValue = produto.valor * 0.1; // 10% de desconto
-      setValorComDesconto(produto.valor - discountValue);
+    if (couponCode.toUpperCase() === produto.cupom.toUpperCase()) {
+      setValorComDesconto(produto.valorDesconto);
       setDiscountApplied(true);
+      setCupomError('');
     } else {
-      alert('Cupom inválido');
+      setCouponCode('');
+      setCupomError('Cupom inválido');
       setDiscountApplied(false);
       setValorComDesconto(null);
+      
+      // Limpar mensagem de erro após 3 segundos
+      setTimeout(() => {
+        setCupomError('');
+      }, 3000);
     }
+  };
+
+  // Função para retirar o cupom
+  const handleRemoveCoupon = () => {
+    setCouponCode('');
+    setDiscountApplied(false);
+    setValorComDesconto(null);
   };
 
   // Formatação do valor para exibição
   const formatarValor = (valor: number) => {
-    return valor.toFixed(2).replace('.', ',');
+    return valor.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
   };
 
   // Valor que será exibido (com ou sem desconto)
   const valorExibido = valorComDesconto !== null ? valorComDesconto : (produto?.valor || 0);
+
+  // Função para renderizar o overlay de processamento
+  const ProcessingOverlay = () => (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="absolute inset-0 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center z-50"
+    >
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0F2B1B] mb-4" />
+      <p className="text-[#0F2B1B] text-lg font-medium mb-2">Por favor, aguarde...</p>
+      <p className="text-[#0F2B1B]/60 text-sm">Estamos processando seu pagamento</p>
+    </motion.div>
+  );
+
+  // Função para lidar com a mudança de método de pagamento
+  const handlePaymentMethodChange = (method: PaymentMethod) => {
+    setSelectedMethod(method);
+    setPaymentGenerated(false); // Reseta o estado quando troca de método
+  };
 
   if (!produto) {
     return <div className="min-h-screen flex items-center justify-center bg-white text-gray-500">Carregando...</div>;
@@ -277,7 +355,10 @@ export default function PaymentPage() {
                 discountApplied={discountApplied}
                 valorExibido={valorExibido}
                 onApplyCoupon={handleApplyCoupon}
+                onRemoveCoupon={handleRemoveCoupon}
                 formatarValor={formatarValor}
+                cupomError={cupomError}
+                showCouponField={!isProcessing && !paymentGenerated}
               />
 
               <div className="flex-grow"></div>
@@ -316,7 +397,10 @@ export default function PaymentPage() {
                   discountApplied={discountApplied}
                   valorExibido={valorExibido}
                   onApplyCoupon={handleApplyCoupon}
+                  onRemoveCoupon={handleRemoveCoupon}
                   formatarValor={formatarValor}
+                  cupomError={cupomError}
+                  showCouponField={!isProcessing && !paymentGenerated}
                 />
                 
                 {/* Campo de cupom - Versão Mobile */}
@@ -340,7 +424,7 @@ export default function PaymentPage() {
                 </div>
               </div>
 
-              <div className="space-y-4 sm:space-y-5 lg:space-y-6">
+              <div className="space-y-4 sm:space-y-5 lg:space-y-6 relative">
                 {/* User Info Fields */}
                 <UserInfoFields />
 
@@ -351,7 +435,7 @@ export default function PaymentPage() {
                   </h3>
                   <div className="grid grid-cols-3 gap-1.5 sm:gap-2 lg:gap-3">
                     <motion.button
-                      onClick={() => setSelectedMethod('credit-card')}
+                      onClick={() => handlePaymentMethodChange('credit-card')}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       className={`relative flex flex-col items-center justify-center p-2 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
@@ -383,7 +467,7 @@ export default function PaymentPage() {
                     </motion.button>
 
                     <motion.button
-                      onClick={() => setSelectedMethod('pix')}
+                      onClick={() => handlePaymentMethodChange('pix')}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       className={`relative flex flex-col items-center justify-center p-2 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
@@ -415,7 +499,7 @@ export default function PaymentPage() {
                     </motion.button>
 
                     <motion.button
-                      onClick={() => setSelectedMethod('boleto')}
+                      onClick={() => handlePaymentMethodChange('boleto')}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
                       className={`relative flex flex-col items-center justify-center p-2 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
@@ -456,10 +540,41 @@ export default function PaymentPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.3 }}
+                    className="relative"
                   >
-                    {selectedMethod === 'credit-card' && <CreditCardForm />}
-                    {selectedMethod === 'pix' && <PixForm />}
-                    {selectedMethod === 'boleto' && <BoletoForm />}
+                    {selectedMethod === 'credit-card' && (
+                      <CreditCardForm 
+                        discountApplied={discountApplied} 
+                        onProcessingStart={() => {
+                          setIsProcessing(true);
+                          setPaymentGenerated(true);
+                        }}
+                        onProcessingEnd={() => setIsProcessing(false)}
+                      />
+                    )}
+                    {selectedMethod === 'pix' && (
+                      <PixForm 
+                        discountApplied={discountApplied}
+                        onProcessingStart={() => {
+                          setIsProcessing(true);
+                          setPaymentGenerated(true);
+                        }}
+                        onProcessingEnd={() => setIsProcessing(false)}
+                      />
+                    )}
+                    {selectedMethod === 'boleto' && (
+                      <BoletoForm 
+                        discountApplied={discountApplied}
+                        onProcessingStart={() => {
+                          setIsProcessing(true);
+                          setPaymentGenerated(true);
+                        }}
+                        onProcessingEnd={() => setIsProcessing(false)}
+                      />
+                    )}
+                    <AnimatePresence>
+                      {isProcessing && <ProcessingOverlay />}
+                    </AnimatePresence>
                   </motion.div>
                 </AnimatePresence>
               </div>

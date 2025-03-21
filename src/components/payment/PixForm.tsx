@@ -31,7 +31,13 @@ interface PaymentStatus {
   paymentDate: string | null;
 }
 
-export default function PixForm() {
+interface PixFormProps {
+  discountApplied: boolean;
+  onProcessingStart: () => void;
+  onProcessingEnd: () => void;
+}
+
+export default function PixForm({ discountApplied, onProcessingStart, onProcessingEnd }: PixFormProps) {
   const { userInfo, isInfoLocked } = usePayment();
   const { produto } = useProduto();
   const [isCopied, setIsCopied] = useState(false);
@@ -45,6 +51,9 @@ export default function PixForm() {
   const [autoCheckActive, setAutoCheckActive] = useState(false);
   const [autoCheckEnded, setAutoCheckEnded] = useState(false);
   const [currentTransaction, setCurrentTransaction] = useState<Transaction | null>(null);
+
+  // Valor que será usado para o PIX (com ou sem desconto)
+  const valorPix = discountApplied && produto ? produto.valorDesconto : (produto?.valor || 0);
 
   useEffect(() => {
     return () => {
@@ -82,7 +91,7 @@ export default function PixForm() {
       // Verificar diretamente na API de pagamentos
       try {
         console.log('Verificando status do pagamento:', paymentId);
-        const response = await fetch(`/api/payments/${paymentId}`, {
+        const response = await fetch(`/api/asaas/payments/${paymentId}/status`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'
@@ -99,8 +108,9 @@ export default function PixForm() {
         
         // Obter o texto da resposta e tentar parsear como JSON
         const responseText = await response.text();
-        let statusData;
+        console.log('Resposta bruta da API:', responseText);
         
+        let statusData;
         try {
           statusData = JSON.parse(responseText);
         } catch (parseError) {
@@ -109,7 +119,7 @@ export default function PixForm() {
           throw new Error('Resposta inválida do servidor');
         }
         
-        console.log('Status do pagamento:', statusData);
+        console.log('Status do pagamento detalhado:', statusData);
         
         if (statusData && statusData.status) {
           // Atualizar o status do pagamento
@@ -123,10 +133,12 @@ export default function PixForm() {
           // Atualizar a transação com o status recebido
           if (currentTransaction?.id) {
             try {
+              console.log('Atualizando status da transação para:', statusData.status);
               await TransactionService.updateTransaction(String(currentTransaction.id), {
                 status: statusData.status,
+                dataHora: new Date().toISOString()
               });
-              console.log('Status da transação atualizado para:', statusData.status);
+              console.log('Status da transação atualizado com sucesso');
               
               // Se o pagamento foi confirmado, finalizar a transação
               if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(statusData.status)) {
@@ -136,6 +148,9 @@ export default function PixForm() {
                   const transactionId = Number(currentTransaction.id);
                   await TransactionService.finalizeTransaction(transactionId);
                   console.log('Transação finalizada com sucesso');
+                  
+                  // Redirecionar para a página de sucesso ou mostrar mensagem
+                  window.location.href = '/success';
                 } catch (error) {
                   console.error('Erro ao finalizar transação:', error);
                 }
@@ -207,10 +222,10 @@ export default function PixForm() {
     // Verificar imediatamente uma vez
     checkPaymentStatus(paymentId);
     
-    // Configuração para verificar 4 vezes em 2 minutos (30 segundos entre cada verificação)
+    // Configurar para verificar a cada 15 segundos por 5 minutos
     const checkCount = { current: 0 };
-    const maxChecks = 4;
-    const checkInterval = 30000; // 30 segundos
+    const maxChecks = 20; // 5 minutos = 20 verificações a cada 15 segundos
+    const checkInterval = 15000; // 15 segundos
     
     const interval = setInterval(async () => {
       checkCount.current += 1;
@@ -226,7 +241,7 @@ export default function PixForm() {
         setAutoCheckActive(false);
         setAutoCheckEnded(true);
       } else if (checkCount.current >= maxChecks) {
-        // Parar após 4 verificações
+        // Parar após 20 verificações (5 minutos)
         console.log('Máximo de verificações atingido, parando verificação automática');
         clearInterval(interval);
         setAutoCheckInterval(null);
@@ -261,6 +276,7 @@ export default function PixForm() {
       return;
     }
 
+    // Validar dados obrigatórios
     if (!userInfo.email || !userInfo.whatsapp) {
       setError('Email e WhatsApp são obrigatórios para o pagamento');
       return;
@@ -268,228 +284,174 @@ export default function PixForm() {
 
     setLoading(true);
     setError(null);
+    onProcessingStart();
 
     try {
-      safeLog('Iniciando geração de PIX com dados', {
+      console.log('Iniciando geração de PIX com dados:', {
         email: userInfo.email,
         asaasId: userInfo.asaasId,
-        valor: produto.valor
+        valor: valorPix
       });
 
+      // Buscar usuário no Supabase
       const response = await fetch(`/api/asaas/customers/${userInfo.asaasId}`);
       if (!response.ok) {
         throw new Error('Erro ao buscar informações do usuário');
       }
       const userData = await response.json();
 
+      // Validar se o usuário foi encontrado e tem ID
       if (!userData || !userData.id) {
         console.error('Dados do usuário inválidos:', userData);
         throw new Error('Usuário não encontrado no sistema');
       }
 
-      safeLog('Usuário encontrado', {
+      console.log('Usuário encontrado:', {
         id: userData.id,
         email: userData.email,
         idCustomerAsaas: userData.idCustomerAsaas
       });
 
+      // Buscar transação pendente existente
       const response2 = await fetch(`/api/transactions/pending/${userData.id}`);
       let transaction = null;
       
       if (response2.ok) {
         let pendingTransaction = await response2.json();
         if (pendingTransaction && pendingTransaction.id) {
-          safeLog('Transação pendente encontrada', pendingTransaction);
+          console.log('Transação pendente encontrada:', pendingTransaction);
           
           // Verificar se o valor da transação está atualizado com o valor atual do produto
-          const valorAtualizado = pendingTransaction.valor === produto.valor;
+          const valorAtualizado = pendingTransaction.valor === valorPix;
           
           if (!valorAtualizado) {
-            safeLog('Valor do produto foi alterado, atualizando transação', {
+            console.log('Valor do produto foi alterado, atualizando transação:', {
               valorAntigo: pendingTransaction.valor,
-              valorNovo: produto.valor
+              valorNovo: valorPix
             });
           }
           
+          // Atualizar transação existente para PIX
           try {
             await TransactionService.updateTransaction(pendingTransaction.id, {
-              valor: produto.valor,
+              valor: valorPix,
               produto: produto.id,
               metodoPagamento: 'PIX',
               metaData: {
                 ...pendingTransaction.metaData,
                 produto: {
-                  valor: produto.valor
+                  valor: valorPix
                 },
                 valorAtualizado: true
               }
             });
             
             transaction = pendingTransaction;
-            safeLog('Transação atualizada para PIX', {
+            console.log('Transação atualizada para PIX:', {
               id: transaction.id,
-              valorAtualizado: produto.valor
+              valorAtualizado: valorPix
             });
           } catch (updateError) {
             console.error('Erro ao atualizar valor da transação:', updateError);
+            // Se falhar em atualizar, criar nova transação
             pendingTransaction = null;
           }
         }
       }
 
+      // Se não encontrou transação pendente, cria uma nova
       if (!transaction) {
         const transactionData: TransactionData = {
-          valor: produto.valor,
+          valor: valorPix,
           status: 'PENDING',
           metodoPagamento: 'PIX',
           userId: userData.id,
           productId: produto.id,
           idCustomerAsaas: userInfo.asaasId,
-          users: Number(userData.id),
-          produto: produto.id,
           metaData: {
             ...userInfo,
             produto: {
-              valor: produto.valor
+              valor: valorPix
             }
           }
         };
 
-        safeLog('Criando nova transação com dados', transactionData);
+        console.log('Criando nova transação com dados:', transactionData);
         
         transaction = await TransactionService.createTransaction(transactionData);
         
         if (!transaction || !transaction.id) {
           throw new Error('Falha ao criar transação: ID não retornado');
         }
-
-        safeLog('Nova transação criada com sucesso', {
-          id: transaction.id,
-          status: transaction.status,
-          users: transaction.users
-        });
       }
-        
-      setCurrentTransaction(transaction);
 
-      // Usar o novo endpoint para criar pagamento PIX
-      const responsePix = await fetch('/api/payments', {
+      console.log('Nova transação criada com sucesso:', {
+        id: transaction.id,
+        status: transaction.status,
+        users: transaction.users
+      });
+        
+      console.log('Enviando requisição para gerar PIX...');
+      const responsePix = await fetch('/api/asaas/pix', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          billingType: 'PIX',
-          customer: userInfo.asaasId,
-          value: Number(produto.valor.toFixed(2)),
-          dueDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
-          description: `Assinatura Aicrus Academy - ${userInfo.email}`
+          customerId: userInfo.asaasId,
+          description: `Assinatura Aicrus Academy - ${userInfo.email}`,
+          value: Number(valorPix.toFixed(2))
         }),
         cache: 'no-store'
       });
 
+      console.log('Resposta da API de PIX:', {
+        status: responsePix.status,
+        statusText: responsePix.statusText
+      });
+
       if (!responsePix.ok) {
-        const errorData = await responsePix.json();
-        console.error('Erro na resposta da API de pagamento:', errorData);
-        throw new Error(errorData.error || 'Falha ao gerar cobrança PIX');
-      }
-
-      const paymentData = await responsePix.json();
-      safeLog('Pagamento PIX criado com sucesso', { id: paymentData.id });
-
-      // Atualizar a transação com o ID do pagamento
-      if (transaction.id && paymentData.id) {
+        const errorText = await responsePix.text();
+        console.error('Erro na resposta da API PIX:', errorText);
+        
+        let errorData;
         try {
-          await TransactionService.updateTransaction(transaction.id, {
-            idPayAsaas: paymentData.id
-          });
-          safeLog('ID do pagamento atualizado na transação', { paymentId: paymentData.id });
-        } catch (updateError) {
-          console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: 'Erro ao processar resposta do servidor' };
         }
+        
+        throw new Error(errorData.error || 'Falha ao gerar PIX');
       }
 
-      // Obter o QR code usando o novo endpoint
-      const pixQrCodeResponse = await fetch(`/api/payments/${paymentData.id}/pixQrCode`, {
-        method: 'GET',
-        cache: 'no-store'
-      });
+      const pixResponse = await responsePix.json();
+      console.log('Dados do PIX recebidos:', pixResponse);
 
-      console.log('Resposta da API QR Code:', {
-        status: pixQrCodeResponse.status,
-        statusText: pixQrCodeResponse.statusText
-      });
-
-      // Obter o texto da resposta antes de tentar processar como JSON
-      let responseText;
-      try {
-        responseText = await pixQrCodeResponse.text();
-        console.log('Resposta do QR Code (primeiros 100 caracteres):', 
-          responseText ? responseText.substring(0, 100) : 'Resposta vazia');
-      } catch (textError) {
-        console.error('Erro ao ler texto da resposta:', textError);
-        throw new Error('Erro ao ler resposta do servidor para QR Code');
-      }
-
-      if (!responseText || responseText.trim() === '') {
-        console.error('Resposta vazia recebida para QR Code PIX');
-        throw new Error('Resposta vazia do servidor para QR Code PIX');
-      }
-
-      // Processar a resposta JSON
-      let pixQrCodeData;
-      try {
-        pixQrCodeData = JSON.parse(responseText);
-      } catch (jsonError) {
-        console.error('Erro ao processar JSON da resposta QR Code:', jsonError);
-        console.error('Conteúdo da resposta:', responseText.substring(0, 200));
-        throw new Error('Resposta inválida do servidor para QR Code');
-      }
-
-      if (!pixQrCodeResponse.ok) {
-        console.error('Erro ao obter QR code PIX:', pixQrCodeData);
-        throw new Error(pixQrCodeData.error || pixQrCodeData.message || 'Falha ao gerar QR Code PIX');
-      }
-
-      if (!pixQrCodeData.encodedImage || !pixQrCodeData.payload) {
-        console.error('Dados incompletos do QR Code PIX:', pixQrCodeData);
-        throw new Error('QR Code PIX incompleto ou inválido');
-      }
-
-      console.log('QR Code PIX obtido com sucesso para pagamento:', paymentData.id);
-      
-      // Configurar os dados do PIX com as informações obtidas
       setPixData({
-        paymentId: paymentData.id,
-        status: paymentData.status,
-        encodedImage: pixQrCodeData.encodedImage,
-        payload: pixQrCodeData.payload,
-        expirationDate: pixQrCodeData.expirationDate
+        paymentId: pixResponse.paymentId,
+        status: pixResponse.status,
+        encodedImage: pixResponse.encodedImage,
+        payload: pixResponse.payload,
+        expirationDate: pixResponse.expirationDate
       });
 
-      // Configurar status do pagamento
-      setPaymentStatus({
-        id: paymentData.id,
-        status: paymentData.status,
-        value: paymentData.value,
-        netValue: paymentData.netValue || paymentData.value,
-        description: paymentData.description,
-        billingType: paymentData.billingType,
-        confirmedDate: null,
-        paymentDate: null
-      });
-      
-      // Iniciar verificação automática do status
-      startAutoCheck(paymentData.id);
+      // Iniciar verificação automática imediatamente após gerar o PIX
+      if (pixResponse.paymentId) {
+        console.log('Iniciando verificação automática do pagamento:', pixResponse.paymentId);
+        startAutoCheck(pixResponse.paymentId);
+      }
+
+      setCurrentTransaction(transaction);
     } catch (err) {
       console.error('Erro completo ao gerar PIX:', err);
       setError(
         err instanceof Error 
           ? err.message 
-          : 'Erro ao gerar QR Code PIX. Por favor, tente novamente.'
+          : 'Erro ao gerar PIX. Por favor, tente novamente.'
       );
     } finally {
       setLoading(false);
+      onProcessingEnd();
     }
   };
 
@@ -710,7 +672,7 @@ export default function PixForm() {
               </li>
               <li className="flex items-start">
                 <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">4</span>
-                <span>Confirme o valor de R$ {formatarMoeda(produto?.valor || 0)}</span>
+                <span>Confirme o valor de R$ {formatarMoeda(valorPix)}</span>
               </li>
               <li className="flex items-start">
                 <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">5</span>

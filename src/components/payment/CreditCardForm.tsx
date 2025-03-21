@@ -48,10 +48,19 @@ interface CreditCardPaymentResponse {
   confirmedDate: string | null;
 }
 
-export default function CreditCardForm() {
+interface CreditCardFormProps {
+  discountApplied: boolean;
+  onProcessingStart: () => void;
+  onProcessingEnd: () => void;
+}
+
+export default function CreditCardForm({ discountApplied, onProcessingStart, onProcessingEnd }: CreditCardFormProps) {
   const { userInfo, isInfoLocked } = usePayment();
   const { produto } = useProduto();
-  const { podeParcelar, parcelas } = useParcelamento(produto?.valor || 0);
+  
+  // Valor que será usado para o cartão (com ou sem desconto)
+  const valorCartao = discountApplied && produto ? produto.valorDesconto : (produto?.valor || 0);
+  const { podeParcelar, parcelas } = useParcelamento(valorCartao);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,23 +164,23 @@ export default function CreditCardForm() {
     }
 
     // Validar valor mínimo
-    const valorProduto = produto?.valor || 0;
-    if (valorProduto < 5) {
+    if (valorCartao < 5) {
       setError('O valor mínimo para pagamento com cartão é de R$ 5,00');
       return;
-    } else if (valorProduto < 10) {
+    } else if (valorCartao < 10) {
       setError('Pagamento apenas à vista.');
       return;
-    } else if (valorProduto < 20) {
+    } else if (valorCartao < 20) {
       setError('Parcelado em até 2x.');
       return;
-    } else if (valorProduto < 50) {
+    } else if (valorCartao < 50) {
       setError('Parcelado em até 3x.');
       return;
     }
 
     setLoading(true);
     setError(null);
+    onProcessingStart();
 
     try {
       // Buscar usuário no Supabase
@@ -196,26 +205,26 @@ export default function CreditCardForm() {
         if (pendingTransaction && pendingTransaction.id) {
           console.log('Transação pendente encontrada:', pendingTransaction);
           
-          // Verificar se o valor da transação está atualizado com o valor atual do produto
-          const valorAtualizado = pendingTransaction.valor === produto.valor;
+          // Verificar se o valor da transação está atualizado com o valor atual
+          const valorAtualizado = pendingTransaction.valor === valorCartao;
           
           if (!valorAtualizado) {
             console.log('Valor do produto foi alterado, atualizando transação:', {
               valorAntigo: pendingTransaction.valor,
-              valorNovo: produto.valor
+              valorNovo: valorCartao
             });
           }
           
           // Atualizar transação existente para cartão
           try {
             await TransactionService.updateTransaction(pendingTransaction.id, {
-              valor: produto.valor,
+              valor: valorCartao,
               produto: produto.id,
               metodoPagamento: 'CREDIT_CARD',
               metaData: {
                 ...pendingTransaction.metaData,
                 produto: {
-                  valor: produto.valor
+                  valor: valorCartao
                 },
                 valorAtualizado: true
               }
@@ -224,7 +233,7 @@ export default function CreditCardForm() {
             transaction = pendingTransaction;
             console.log('Transação atualizada para cartão:', {
               id: transaction.id,
-              valorAtualizado: produto.valor
+              valorAtualizado: valorCartao
             });
           } catch (updateError) {
             console.error('Erro ao atualizar valor da transação:', updateError);
@@ -237,7 +246,7 @@ export default function CreditCardForm() {
       // Se não encontrou transação pendente, cria uma nova
       if (!transaction) {
         const transactionData: TransactionData = {
-          valor: produto.valor,
+          valor: valorCartao,
           status: 'PENDING',
           metodoPagamento: 'CREDIT_CARD',
           userId: userData.id,
@@ -247,11 +256,8 @@ export default function CreditCardForm() {
             email: userInfo.email,
             whatsapp: userInfo.whatsapp,
             produto: {
-              valor: produto.valor
-            },
-            parcelas: selectedInstallment,
-            lgpdConsent: true,
-            lgpdConsentDate: new Date().toISOString()
+              valor: valorCartao
+            }
           }
         };
 
@@ -441,6 +447,8 @@ export default function CreditCardForm() {
           : 'Erro ao processar pagamento. Por favor, tente novamente.'
       );
       setLoading(false);
+    } finally {
+      onProcessingEnd();
     }
   };
 
@@ -498,14 +506,13 @@ export default function CreditCardForm() {
                 <h3 className="text-lg font-medium text-gray-900">Pagamento com Cartão</h3>
                 <p className="mt-2 text-sm text-gray-600">
                   {(() => {
-                    const valorProduto = produto?.valor || 0;
-                    if (valorProduto < 5) {
+                    if (valorCartao < 5) {
                       return 'Valor mínimo para pagamento com cartão é R$ 5,00';
-                    } else if (valorProduto < 10) {
+                    } else if (valorCartao < 10) {
                       return 'Pagamento apenas à vista.';
-                    } else if (valorProduto < 20) {
+                    } else if (valorCartao < 20) {
                       return 'Parcelado em até 2x.';
-                    } else if (valorProduto < 50) {
+                    } else if (valorCartao < 50) {
                       return 'Parcelado em até 3x.';
                     } else {
                       return 'Parcelado em até 12x.';
@@ -567,14 +574,13 @@ export default function CreditCardForm() {
             <h3 className="text-lg font-medium text-gray-900">Pagamento com Cartão</h3>
             <p className="mt-2 text-sm text-gray-600">
               {(() => {
-                const valorProduto = produto?.valor || 0;
-                if (valorProduto < 5) {
+                if (valorCartao < 5) {
                   return 'Valor mínimo para pagamento com cartão é R$ 5,00';
-                } else if (valorProduto < 10) {
+                } else if (valorCartao < 10) {
                   return 'Pagamento apenas à vista.';
-                } else if (valorProduto < 20) {
+                } else if (valorCartao < 20) {
                   return 'Parcelado em até 2x.';
-                } else if (valorProduto < 50) {
+                } else if (valorCartao < 50) {
                   return 'Parcelado em até 3x.';
                 } else {
                   return 'Parcelado em até 12x.';
@@ -606,7 +612,7 @@ export default function CreditCardForm() {
                   ))
                 ) : (
                   <option value={1}>
-                    À vista - R$ {formatarMoeda(produto?.valor || 0)}
+                    À vista - R$ {formatarMoeda(valorCartao)}
                   </option>
                 )}
               </select>

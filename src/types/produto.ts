@@ -8,4 +8,6 @@ export type Produto = {
   valor: number;
   porcentagemDesconto: string;
   urlSucesso?: string;
+  cupom: string;
+  valorDesconto: number;
 }; 

@@ -20,7 +20,13 @@ interface BoletoPaymentResponse {
   barCode: string;
 }
 
-export default function BoletoForm() {
+interface BoletoFormProps {
+  discountApplied: boolean;
+  onProcessingStart: () => void;
+  onProcessingEnd: () => void;
+}
+
+export default function BoletoForm({ discountApplied, onProcessingStart, onProcessingEnd }: BoletoFormProps) {
   const { userInfo, isInfoLocked } = usePayment();
   const { produto } = useProduto();
   const [loading, setLoading] = useState(false);
@@ -28,6 +34,9 @@ export default function BoletoForm() {
   const [error, setError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [showToast, setShowToast] = useState(false);
+
+  // Valor que será usado para o boleto (com ou sem desconto)
+  const valorBoleto = discountApplied && produto ? produto.valorDesconto : (produto?.valor || 0);
 
   const handleGenerateBoleto = async () => {
     if (!userInfo) {
@@ -46,7 +55,7 @@ export default function BoletoForm() {
     }
 
     // Validar valor mínimo exigido pelo Asaas (R$ 5,00)
-    if (produto.valor < 5) {
+    if (valorBoleto < 5) {
       setError('O valor mínimo para pagamento via boleto é de R$ 5,00 (restrição da operadora de pagamento)');
       return;
     }
@@ -59,12 +68,13 @@ export default function BoletoForm() {
 
     setLoading(true);
     setError(null);
+    onProcessingStart();
 
     try {
       console.log('Iniciando geração de boleto com dados:', {
         email: userInfo.email,
         asaasId: userInfo.asaasId,
-        valor: produto.valor
+        valor: valorBoleto
       });
 
       // Buscar usuário no Supabase
@@ -96,25 +106,25 @@ export default function BoletoForm() {
           console.log('Transação pendente encontrada:', pendingTransaction);
           
           // Verificar se o valor da transação está atualizado com o valor atual do produto
-          const valorAtualizado = pendingTransaction.valor === produto.valor;
+          const valorAtualizado = pendingTransaction.valor === valorBoleto;
           
           if (!valorAtualizado) {
             console.log('Valor do produto foi alterado, atualizando transação:', {
               valorAntigo: pendingTransaction.valor,
-              valorNovo: produto.valor
+              valorNovo: valorBoleto
             });
           }
           
           // Atualizar transação existente para boleto
           try {
             await TransactionService.updateTransaction(pendingTransaction.id, {
-              valor: produto.valor,
+              valor: valorBoleto,
               produto: produto.id,
               metodoPagamento: 'BOLETO',
               metaData: {
                 ...pendingTransaction.metaData,
                 produto: {
-                  valor: produto.valor
+                  valor: valorBoleto
                 },
                 valorAtualizado: true
               }
@@ -123,7 +133,7 @@ export default function BoletoForm() {
             transaction = pendingTransaction;
             console.log('Transação atualizada para boleto:', {
               id: transaction.id,
-              valorAtualizado: produto.valor
+              valorAtualizado: valorBoleto
             });
           } catch (updateError) {
             console.error('Erro ao atualizar valor da transação:', updateError);
@@ -136,7 +146,7 @@ export default function BoletoForm() {
       // Se não encontrou transação pendente, cria uma nova
       if (!transaction) {
         const transactionData: TransactionData = {
-          valor: produto.valor,
+          valor: valorBoleto,
           status: 'PENDING',
           metodoPagamento: 'BOLETO',
           userId: userData.id,
@@ -145,7 +155,7 @@ export default function BoletoForm() {
           metaData: {
             ...userInfo,
             produto: {
-              valor: produto.valor
+              valor: valorBoleto
             }
           }
         };
@@ -174,7 +184,7 @@ export default function BoletoForm() {
         body: JSON.stringify({
           customerId: userInfo.asaasId,
           description: `Assinatura Aicrus Academy - ${userInfo.email}`,
-          value: Number(produto.valor.toFixed(2))
+          value: Number(valorBoleto.toFixed(2))
         }),
         cache: 'no-store'
       });
@@ -229,6 +239,7 @@ export default function BoletoForm() {
       );
     } finally {
       setLoading(false);
+      onProcessingEnd();
     }
   };
 
@@ -288,12 +299,12 @@ export default function BoletoForm() {
                   <div>
                     <h4 className="text-sm font-medium text-[#0F2B1B]">Informações do Boleto</h4>
                     <ul className="mt-2 text-sm text-gray-600 space-y-1">
-                      <li>✓ Valor: R$ {formatarMoeda(produto?.valor || 0)}</li>
+                      <li>✓ Valor: R$ {formatarMoeda(valorBoleto)}</li>
                       <li>✓ Vencimento em 3 dias úteis</li>
                       <li>✓ Pode ser pago em qualquer banco</li>
                       <li>✓ Acesso liberado após compensação</li>
                     </ul>
-                    {produto && produto.valor < 5 && (
+                    {valorBoleto < 5 && (
                       <div className="mt-2 text-amber-600 text-sm font-medium">
                         ⚠️ Valor mínimo para boleto: R$ 5,00 (restrição da operadora)
                       </div>
@@ -349,12 +360,12 @@ export default function BoletoForm() {
                 <div>
                   <h4 className="text-sm font-medium text-[#0F2B1B]">Informações do Boleto</h4>
                   <ul className="mt-2 text-sm text-gray-600 space-y-1">
-                    <li>✓ Valor: R$ {formatarMoeda(produto?.valor || 0)}</li>
+                    <li>✓ Valor: R$ {formatarMoeda(valorBoleto)}</li>
                     <li>✓ Vencimento em 3 dias úteis</li>
                     <li>✓ Pode ser pago em qualquer banco</li>
                     <li>✓ Acesso liberado após compensação</li>
                   </ul>
-                  {produto && produto.valor < 5 && (
+                  {valorBoleto < 5 && (
                     <div className="mt-2 text-amber-600 text-sm font-medium">
                       ⚠️ Valor mínimo para boleto: R$ 5,00 (restrição da operadora)
                     </div>
@@ -366,7 +377,7 @@ export default function BoletoForm() {
             <button
               id="generate-boleto-button"
               onClick={handleGenerateBoleto}
-              disabled={loading || (produto ? produto.valor < 5 : false)}
+              disabled={loading || (produto ? valorBoleto < 5 : false)}
               className="w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-base font-medium text-white bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B] transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -374,7 +385,7 @@ export default function BoletoForm() {
               ) : (
                 <>
                   <DocumentTextIcon className="h-5 w-5 mr-3" />
-                  {produto && produto.valor < 5 ? 'VALOR MÍNIMO R$ 5,00' : 'GERAR BOLETO'}
+                  {produto && valorBoleto < 5 ? 'VALOR MÍNIMO R$ 5,00' : 'GERAR BOLETO'}
                 </>
               )}
             </button>
