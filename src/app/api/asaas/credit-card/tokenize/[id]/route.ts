@@ -3,10 +3,10 @@ import { supabase } from '@/lib/supabase';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: any
 ) {
   try {
-    const cardId = params.id;
+    const cardId = context.params.id;
 
     if (!cardId) {
       return NextResponse.json(
