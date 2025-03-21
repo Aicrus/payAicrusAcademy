@@ -5,6 +5,7 @@ interface UserInfo {
   email: string;
   cpf: string;
   whatsapp: string;
+  dialCode: string;
   asaasId?: string;
 }
 

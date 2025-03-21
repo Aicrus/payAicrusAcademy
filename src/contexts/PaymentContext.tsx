@@ -8,6 +8,7 @@ interface UserInfo {
   email: string;
   cpf: string;
   whatsapp: string;
+  dialCode: string;
   asaasId?: string;
 }
 
@@ -24,7 +25,19 @@ export function PaymentProvider({ children }: { children: ReactNode }) {
   const [userInfo, setUserInfoState] = useState<UserInfo | null>(() => {
     // Carregar dados do cache ao inicializar
     if (typeof window !== 'undefined') {
-      return UserInfoService.getFromCache();
+      const cachedInfo = UserInfoService.getFromCache();
+      // Adicionar dialCode se não existir no cache
+      if (cachedInfo) {
+        return {
+          name: cachedInfo.name,
+          email: cachedInfo.email,
+          cpf: cachedInfo.cpf,
+          whatsapp: cachedInfo.whatsapp,
+          dialCode: cachedInfo.dialCode || '+55',
+          asaasId: cachedInfo.asaasId
+        };
+      }
+      return null;
     }
     return null;
   });
@@ -38,7 +51,23 @@ export function PaymentProvider({ children }: { children: ReactNode }) {
   }, [userInfo]);
 
   const setUserInfo = (info: UserInfo | ((prevInfo: UserInfo | null) => UserInfo)) => {
-    setUserInfoState(info);
+    if (typeof info === 'function') {
+      setUserInfoState((prevState) => {
+        const newInfo = info(prevState);
+        // Garantir que dialCode sempre tenha um valor padrão
+        if (!newInfo.dialCode) {
+          return { ...newInfo, dialCode: '+55' };
+        }
+        return newInfo;
+      });
+    } else {
+      // Garantir que dialCode sempre tenha um valor padrão
+      if (!info.dialCode) {
+        setUserInfoState({ ...info, dialCode: '+55' });
+      } else {
+        setUserInfoState(info);
+      }
+    }
   };
 
   return (

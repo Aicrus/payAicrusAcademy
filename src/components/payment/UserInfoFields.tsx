@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { usePayment } from '@/contexts/PaymentContext';
 import { motion } from 'framer-motion';
 import { UserIcon, EnvelopeIcon, PhoneIcon, DocumentTextIcon, PencilIcon } from '@heroicons/react/24/outline';
-import { formatCPF, formatPhone } from '@/utils/format';
+import { formatCPF, formatPhone, joinPhoneWithDialCode } from '@/utils/format';
+import CountryCodeSelect from '@/components/ui/CountryCodeSelect';
 
 export default function UserInfoFields() {
   const { userInfo, setUserInfo, isInfoLocked, setIsInfoLocked } = usePayment();
@@ -54,11 +55,16 @@ export default function UserInfoFields() {
         throw new Error('Por favor, preencha todos os campos obrigatórios');
       }
 
+      // Formatar o número de telefone com o código internacional para o Asaas
+      const formattedPhone = userInfo.whatsapp.replace(/\D/g, '');
+      const completePhone = userInfo.dialCode + formattedPhone;
+
       const customerData = {
         name: userInfo.name,
         cpfCnpj: userInfo.cpf.replace(/\D/g, ''),
         email: userInfo.email,
-        mobilePhone: userInfo.whatsapp.replace(/\D/g, ''),
+        mobilePhone: formattedPhone,
+        phone: completePhone,
         personType: userInfo.cpf.replace(/\D/g, '').length <= 11 ? 'FISICA' : 'JURIDICA'
       };
 
@@ -113,7 +119,8 @@ export default function UserInfoFields() {
               name: '',
               email: '',
               cpf: '',
-              whatsapp: ''
+              whatsapp: '',
+              dialCode: '+55'
             }),
             asaasId: undefined
           }));
@@ -139,7 +146,8 @@ export default function UserInfoFields() {
               name: '',
               email: '',
               cpf: '',
-              whatsapp: ''
+              whatsapp: '',
+              dialCode: '+55'
             }),
             asaasId: createData.id
           }));
@@ -187,7 +195,8 @@ export default function UserInfoFields() {
             name: '',
             email: '',
             cpf: '',
-            whatsapp: ''
+            whatsapp: '',
+            dialCode: '+55'
           }),
           asaasId: undefined
         }));
@@ -210,7 +219,9 @@ export default function UserInfoFields() {
     if (field === 'cpf') {
       value = formatCPF(value);
     } else if (field === 'whatsapp') {
-      value = formatPhone(value);
+      // Formatar apenas o número, sem o código do país
+      const isBrazilian = userInfo?.dialCode === '+55';
+      value = formatPhone(value, isBrazilian);
     }
 
     setUserInfo(prevInfo => ({
@@ -218,9 +229,25 @@ export default function UserInfoFields() {
         name: '',
         email: '',
         cpf: '',
-        whatsapp: ''
+        whatsapp: '',
+        dialCode: '+55'
       }),
       [field]: value
+    }));
+  };
+
+  const handleDialCodeChange = (dialCode: string) => {
+    if (isInfoLocked) return;
+    
+    setUserInfo(prevInfo => ({
+      ...(prevInfo || {
+        name: '',
+        email: '',
+        cpf: '',
+        whatsapp: '',
+        dialCode: '+55'
+      }),
+      dialCode
     }));
   };
 
@@ -265,7 +292,7 @@ export default function UserInfoFields() {
             </div>
             <div className="flex items-center text-sm text-gray-600">
               <PhoneIcon className="h-5 w-5 text-gray-400 mr-2" />
-              <span>{userInfo?.whatsapp}</span>
+              <span>{joinPhoneWithDialCode(userInfo?.dialCode || '+55', userInfo?.whatsapp || '')}</span>
             </div>
           </div>
         </div>
@@ -365,23 +392,32 @@ export default function UserInfoFields() {
           <label htmlFor="whatsapp" className="block text-sm font-medium text-gray-700">
             WhatsApp
           </label>
-          <div className="mt-1 relative rounded-lg shadow-sm">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <PhoneIcon className="h-5 w-5 text-gray-400" />
-            </div>
-            <input
-              type="tel"
-              id="whatsapp"
-              name="whatsapp"
-              required
+          <div className="mt-1 flex rounded-lg shadow-sm">
+            <CountryCodeSelect 
+              value={userInfo?.dialCode || '+55'} 
+              onChange={handleDialCodeChange}
               disabled={isInfoLocked}
-              value={userInfo?.whatsapp || ''}
-              onChange={handleInputChange('whatsapp')}
-              placeholder="(00) 00000-0000"
-              maxLength={15}
-              className="block w-full pl-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
             />
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <PhoneIcon className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="tel"
+                id="whatsapp"
+                name="whatsapp"
+                required
+                disabled={isInfoLocked}
+                value={userInfo?.whatsapp || ''}
+                onChange={handleInputChange('whatsapp')}
+                placeholder={userInfo?.dialCode === '+55' ? "(00) 00000-0000" : "000 000 0000"}
+                className="block w-full pl-10 rounded-r-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+              />
+            </div>
           </div>
+          <p className="mt-1 text-xs text-gray-500">
+            Selecione o código do país antes do número
+          </p>
         </div>
       </div>
 
