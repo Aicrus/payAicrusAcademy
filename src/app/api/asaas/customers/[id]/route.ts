@@ -35,25 +35,24 @@ export async function PUT(
         newEmail: data.email
       });
 
-      // Criar novo cliente
+      // Criar novo cliente no Asaas
       const newCustomer = await createCustomer(data);
 
-      // Atualizar registro no Supabase
+      // Criar novo registro no Supabase
       const { error: supabaseError } = await supabase
         .from('usersAicrusAcademy')
-        .update({
+        .insert([{
           nome: data.name,
           email: data.email,
           cpfCnpj: data.cpfCnpj,
           whatsApp: data.mobilePhone,
-          idCustomerAsaas: newCustomer.id // Atualizar para o novo ID
-        })
-        .eq('idCustomerAsaas', id);
+          idCustomerAsaas: newCustomer.id
+        }]);
 
       if (supabaseError) {
-        console.error('Erro ao atualizar Supabase:', supabaseError);
+        console.error('Erro ao criar novo registro no Supabase:', supabaseError);
         return NextResponse.json(
-          { error: 'Erro ao atualizar registro' },
+          { error: 'Erro ao criar novo registro' },
           { status: 500 }
         );
       }
@@ -107,10 +106,21 @@ export async function DELETE(
     // Excluir cliente no Asaas
     await deleteCustomer(id);
 
-    // Atualizar registro no Supabase
+    // Buscar o usuário no Supabase antes de excluir
+    const { data: user } = await supabase
+      .from('usersAicrusAcademy')
+      .select('*')
+      .eq('idCustomerAsaas', id)
+      .single();
+
+    // Marcar o registro como excluído no Supabase
     const { error: supabaseError } = await supabase
       .from('usersAicrusAcademy')
-      .update({ idCustomerAsaas: null })
+      .update({ 
+        idCustomerAsaas: null,
+        deleted_at: new Date().toISOString(),
+        status: 'DELETED'
+      })
       .eq('idCustomerAsaas', id);
 
     if (supabaseError) {
@@ -119,6 +129,20 @@ export async function DELETE(
         { error: 'Erro ao atualizar registro' },
         { status: 500 }
       );
+    }
+
+    // Limpar o cache do usuário
+    if (user) {
+      await fetch('/api/cache/clear', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email
+        })
+      });
     }
 
     return NextResponse.json({ success: true });
