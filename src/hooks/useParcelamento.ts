@@ -14,9 +14,21 @@ export function useParcelamento(valor: number) {
   
   const parcelas = useMemo(() => {
     const parcelasDisponiveis: ParcelaInfo[] = [];
-    const taxaTransacao = 0.0399; // 3.99%
-    const taxaTransacaoFixa = 0.49; // R$ 0.49
-    const taxaJurosMensal = 0.017; // 1.70% ao mês
+    
+    // Taxas aplicadas no cálculo do parcelamento
+    const taxaTransacao = 0.0399; // 3.99% - Taxa da operadora de cartão aplicada em todas as transações
+    const taxaTransacaoFixa = 0.49; // R$ 0.49 - Taxa fixa aplicada em todas as transações
+    const taxaJurosMensal = 0.017; // 1.70% a.m. - Taxa de juros aplicada para parcelamentos
+    
+    /*
+     * Cálculo de parcelamento:
+     * 1. Para pagamento à vista (1x), não aplicamos taxa de juros, apenas a taxa de transação e taxa fixa
+     * 2. Para pagamentos parcelados:
+     *    a. Primeiro, aplicamos a taxa de transação e taxa fixa (valorComTaxaBase)
+     *    b. Depois, aplicamos a taxa de juros compostos com base no número de parcelas
+     *    c. Calculamos o valor total e dividimos pelo número de parcelas
+     *    d. Ajustamos o valor total para garantir a precisão (evitar diferenças de centavos)
+     */
     
     // Para pagamento à vista, usar o valor original sem taxas
     parcelasDisponiveis.push({
