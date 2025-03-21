@@ -18,7 +18,7 @@ export function useParcelamento(valor: number) {
     // Taxas aplicadas no cálculo do parcelamento
     const taxaTransacao = 0.0399; // 3.99% - Taxa da operadora de cartão aplicada em todas as transações
     const taxaTransacaoFixa = 0.49; // R$ 0.49 - Taxa fixa aplicada em todas as transações
-    const taxaJurosMensal = 0.0255; // 2,55% a.m. - Taxa de juros aplicada para parcelamentos
+    const taxaJurosMensal = 0.0199; // 1,99% a.m. - Taxa de juros aplicada para parcelamentos
     
     /*
      * Cálculo de parcelamento:
