@@ -3,17 +3,20 @@ import { CheckCircleIcon, XCircleIcon, ArrowPathIcon } from '@heroicons/react/24
 import { useEffect, useState } from 'react';
 import { TransactionService } from '@/services/transaction';
 import { useRouter } from 'next/navigation';
+import { useProduto } from '@/contexts/ProdutoContext';
 
 interface PaymentStatusProps {
   status: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH';
   onVerifyClick?: () => void;
   isVerifying?: boolean;
+  autoCheckActive?: boolean;
+  buttonText?: string;
 }
 
 const statusConfig = {
   PENDING: {
     color: 'text-yellow-600',
-    bgColor: 'bg-yellow-50',
+    bgColor: 'bg-white',
     text: 'Aguardando pagamento',
     icon: null
   },
@@ -55,12 +58,13 @@ const spinTransition = {
   ease: "linear"
 };
 
-export default function PaymentStatus({ status, onVerifyClick, isVerifying }: PaymentStatusProps) {
+export default function PaymentStatus({ status, onVerifyClick, isVerifying, autoCheckActive, buttonText = 'Entendi' }: PaymentStatusProps) {
   const config = statusConfig[status];
   const Icon = config.icon;
   const isPaid = status === 'RECEIVED' || status === 'CONFIRMED' || status === 'RECEIVED_IN_CASH';
   const [showDialog, setShowDialog] = useState(false);
   const router = useRouter();
+  const { produto } = useProduto();
   
   // Efeito para mostrar o diálogo quando o pagamento for confirmado
   useEffect(() => {
@@ -91,9 +95,13 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying }: Pa
     // Fechar o diálogo
     setShowDialog(false);
     
-    // Redirecionar para a página inicial ou recarregar a página
+    // Definir a URL de redirecionamento baseada no produto
+    const redirectUrl = produto?.urlSucesso || '/';
+    console.log('Redirecionando para:', redirectUrl);
+    
+    // Redirecionar para a URL de sucesso do produto ou para a página inicial como fallback
     setTimeout(() => {
-      window.location.href = '/';
+      window.location.href = redirectUrl;
     }, 500);
   };
 
@@ -141,8 +149,10 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying }: Pa
                 {config.text}
               </span>
               {status === 'PENDING' && (
-                <span className="text-xs text-gray-400">
-                  Verificação automática em andamento
+                <span className="text-xs text-gray-500">
+                  {autoCheckActive 
+                    ? "Verificação automática em andamento" 
+                    : "Clique em verificar para atualizar o status"}
                 </span>
               )}
             </div>
@@ -151,7 +161,7 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying }: Pa
           {status === 'PENDING' && onVerifyClick && (
             <button
               onClick={onVerifyClick}
-              disabled={isVerifying}
+              disabled={isVerifying || autoCheckActive}
               className="text-xs text-gray-500 hover:text-gray-700 focus:outline-none disabled:opacity-50 transition-colors flex items-center space-x-1"
             >
               {isVerifying ? (
@@ -164,6 +174,17 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying }: Pa
                     <ArrowPathIcon className="w-3 h-3" />
                   </motion.div>
                   <span>Verificando</span>
+                </>
+              ) : autoCheckActive ? (
+                <>
+                  <motion.div
+                    className="w-3 h-3"
+                    animate={{ rotate: 360 }}
+                    transition={spinTransition}
+                  >
+                    <ArrowPathIcon className="w-3 h-3" />
+                  </motion.div>
+                  <span>Verificando automaticamente</span>
                 </>
               ) : (
                 <>
@@ -230,7 +251,7 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying }: Pa
                     onClick={handleConfirmation}
                     className="w-full py-2 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
                   >
-                    Entendi
+                    {buttonText}
                   </button>
                 </motion.div>
               </div>
