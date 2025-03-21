@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { createPixPayment } from '@/services/asaas/payment';
 import { ASAAS_CONFIG } from '@/config/asaas';
 
 interface PixRequestData {
@@ -10,106 +9,94 @@ interface PixRequestData {
 
 export async function POST(request: Request) {
   try {
-    console.log('Rota API PIX - Iniciando processamento');
+    const body = await request.json();
+    const { customerId, description, value } = body;
 
-    // Verificar configuração do Asaas
-    try {
-      console.log('URL da API:', ASAAS_CONFIG.API_URL);
-      const headers = ASAAS_CONFIG.getHeaders();
-      console.log('Headers configurados:', {
-        ...headers,
-        access_token: headers.access_token ? '***' : undefined
+    if (!customerId || !description || !value) {
+      return NextResponse.json(
+        { error: 'Todos os campos são obrigatórios' },
+        { status: 400 }
+      );
+    }
+
+    // 1. Criar a cobrança PIX
+    const paymentUrl = `${ASAAS_CONFIG.API_URL}/payments`;
+    const headers = ASAAS_CONFIG.getHeaders();
+
+    // Data de vencimento para amanhã
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 1);
+    const dueDateStr = dueDate.toISOString().split('T')[0];
+
+    const paymentBody = {
+      customer: customerId,
+      billingType: 'PIX',
+      value: Number(value.toFixed(2)),
+      dueDate: dueDateStr,
+      description
+    };
+
+    console.log('Criando cobrança PIX:', paymentBody);
+
+    const paymentResponse = await fetch(paymentUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(paymentBody),
+      cache: 'no-store'
+    });
+
+    if (!paymentResponse.ok) {
+      const errorText = await paymentResponse.text();
+      console.error('Erro ao criar cobrança:', {
+        status: paymentResponse.status,
+        body: errorText
       });
-    } catch (configError) {
-      console.error('Erro na configuração do Asaas:', configError);
-      return NextResponse.json(
-        { error: 'Erro na configuração do servidor' },
-        { status: 500 }
-      );
-    }
-    
-    const data: PixRequestData = await request.json().catch(error => {
-      console.error('Erro ao processar JSON da requisição:', error);
-      throw new Error('Dados da requisição inválidos');
-    });
-
-    console.log('Recebendo requisição PIX:', {
-      customerId: data.customerId,
-      value: data.value
-    });
-
-    // Validação básica dos dados
-    if (!data.customerId || !data.description || data.value === undefined) {
-      console.error('Dados incompletos:', data);
-      return NextResponse.json(
-        { 
-          error: 'Dados incompletos',
-          details: {
-            customerId: !data.customerId ? 'ID do cliente é obrigatório' : null,
-            description: !data.description ? 'Descrição é obrigatória' : null,
-            value: data.value === undefined ? 'Valor é obrigatório' : null,
-          }
-        },
-        { status: 400 }
-      );
+      throw new Error(`Erro ao criar cobrança: ${paymentResponse.status}`);
     }
 
-    // Garante que o valor seja um número positivo
-    if (data.value <= 0) {
-      console.error('Valor inválido:', data.value);
-      return NextResponse.json(
-        { error: 'Valor deve ser maior que zero' },
-        { status: 400 }
-      );
-    }
+    const payment = await paymentResponse.json();
+    console.log('Cobrança criada:', payment);
 
-    // Garante que o valor tenha no máximo 2 casas decimais
-    const value = Number(data.value.toFixed(2));
-    
-    // Criar QR Code PIX estático diretamente
-    console.log('Gerando QR Code PIX estático...');
-    
-    // Data de expiração para o próximo ano
-    const expirationDate = new Date();
-    expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-    const expirationDateStr = expirationDate.toISOString().split('T')[0] + ' 23:59:59';
-    
-    // Chave PIX fixa do sistema
-    const addressKey = "7a131f8e-d75a-45b5-b999-09944c333a5d";
-    
-    const pixData = await createPixPayment({
-      addressKey: addressKey,
-      description: `Assinatura Aicrus Academy - ${data.description}`,
-      value: value,
-      format: 'ALL',
-      expirationDate: expirationDateStr,
-      allowsMultiplePayments: true
+    // 2. Gerar QR Code PIX
+    const qrCodeUrl = `${ASAAS_CONFIG.API_URL}/payments/${payment.id}/pixQrCode`;
+    console.log('Gerando QR Code para cobrança:', payment.id);
+
+    const qrCodeResponse = await fetch(qrCodeUrl, {
+      method: 'GET',
+      headers,
+      cache: 'no-store'
     });
 
-    console.log('PIX estático gerado com sucesso');
+    if (!qrCodeResponse.ok) {
+      const errorText = await qrCodeResponse.text();
+      console.error('Erro ao gerar QR Code:', {
+        status: qrCodeResponse.status,
+        body: errorText
+      });
+      throw new Error(`Erro ao gerar QR Code: ${qrCodeResponse.status}`);
+    }
 
+    const qrCodeData = await qrCodeResponse.json();
+
+    // 3. Retornar dados combinados
     return NextResponse.json({
-      paymentId: pixData.id,
-      status: 'PENDING',
-      encodedImage: pixData.encodedImage,
-      payload: pixData.payload,
-      expirationDate: pixData.expirationDate
+      id: payment.id,
+      status: payment.status,
+      value: payment.value,
+      netValue: payment.netValue,
+      description: payment.description,
+      encodedImage: qrCodeData.encodedImage,
+      payload: qrCodeData.payload,
+      expirationDate: payment.dueDate
     });
   } catch (error) {
-    console.error('Erro detalhado na rota de criação de PIX:', error);
+    console.error('Erro ao processar PIX:', error);
     
-    if (error instanceof Error) {
-      return NextResponse.json(
-        { 
-          error: 'Erro ao processar pagamento',
-          message: error.message
-        },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json(
-      { error: 'Erro interno ao processar a requisição' },
+      { 
+        error: 'Erro ao processar pagamento',
+        message: error instanceof Error ? error.message : 'Erro desconhecido'
+      },
       { status: 500 }
     );
   }

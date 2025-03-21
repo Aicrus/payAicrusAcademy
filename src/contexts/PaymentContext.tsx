@@ -3,13 +3,14 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { UserInfoService } from '@/services/userInfo';
 
-interface UserInfo {
+export interface UserInfo {
+  id?: number;
+  cpf: string;
   name: string;
   email: string;
-  cpf: string;
-  whatsapp: string;
-  dialCode: string;
   asaasId?: string;
+  dialCode: string;
+  whatsapp: string;
 }
 
 interface PaymentContextData {

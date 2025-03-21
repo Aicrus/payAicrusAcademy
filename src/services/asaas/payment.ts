@@ -1,21 +1,21 @@
 import { ASAAS_CONFIG } from '@/config/asaas';
 
 export interface CreatePixPaymentData {
-  addressKey: string;
+  customer: string;
   description: string;
   value: number;
-  format?: 'ALL' | 'QRCODE' | 'EMV';
-  expirationDate?: string;
-  allowsMultiplePayments?: boolean;
+  dueDate?: string;
 }
 
 export interface PixPayment {
   id: string;
+  status: string;
+  value: number;
+  netValue: number;
+  description: string;
   encodedImage: string;
   payload: string;
-  allowsMultiplePayments: boolean;
   expirationDate: string;
-  externalReference: string | null;
 }
 
 export interface AsaasPaymentData {
@@ -85,7 +85,7 @@ export interface BoletoIdentification {
 // Validações de segurança
 const validatePixData = (data: CreatePixPaymentData) => {
   // Validar chave PIX
-  if (!data.addressKey || data.addressKey.length < 10) {
+  if (!data.customer || data.customer.length < 10) {
     throw new Error('Chave PIX inválida');
   }
 
@@ -100,25 +100,17 @@ const validatePixData = (data: CreatePixPaymentData) => {
   }
 
   // Validar data de expiração
-  if (data.expirationDate) {
-    const expDate = new Date(data.expirationDate);
+  if (data.dueDate) {
+    const expDate = new Date(data.dueDate);
     const now = new Date();
     if (expDate <= now) {
       throw new Error('Data de expiração inválida');
     }
   }
-
-  // Validar formato
-  if (data.format && !['ALL', 'QRCODE', 'EMV'].includes(data.format)) {
-    throw new Error('Formato inválido');
-  }
 }
 
 export async function createPixPayment(data: CreatePixPaymentData): Promise<PixPayment> {
   try {
-    // Validar dados antes de prosseguir
-    validatePixData(data);
-
     // Verificar variáveis de ambiente
     if (!process.env.ASAAS_ACCESS_TOKEN) {
       throw new Error('Token de acesso não configurado');
@@ -128,115 +120,96 @@ export async function createPixPayment(data: CreatePixPaymentData): Promise<PixP
       throw new Error('URL da API não configurada');
     }
 
-    // Não logar dados sensíveis
-    console.log('Iniciando criação de pagamento PIX estático');
+    console.log('Iniciando criação de cobrança PIX');
 
-    const url = `${process.env.NEXT_PUBLIC_ASAAS_API_URL}/pix/qrCodes/static`;
+    // 1. Primeiro criar a cobrança PIX
+    const paymentUrl = `${process.env.NEXT_PUBLIC_ASAAS_API_URL}/payments`;
     
-    // Limita a descrição a 37 caracteres
-    const description = data.description.length > 37 
-      ? data.description.substring(0, 37)
-      : data.description;
-
     // Formatar o token de acesso
     const accessToken = process.env.ASAAS_ACCESS_TOKEN.startsWith('aact_') 
       ? `$${process.env.ASAAS_ACCESS_TOKEN}`
       : process.env.ASAAS_ACCESS_TOKEN;
 
-    // Headers corretos para a API do Asaas
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'access_token': accessToken
     };
 
-    // Log para debug (sem expor o token completo)
-    console.log('Headers configurados:', {
-      contentType: headers['Content-Type'],
-      accept: headers['Accept'],
-      hasAccessToken: !!headers['access_token'],
-      tokenPrefix: headers['access_token']?.substring(0, 5)
-    });
-
-    // Evitar logging de dados sensíveis
-    console.log('Iniciando requisição para Asaas - PIX estático');
-
-    const body = {
-      addressKey: data.addressKey,
-      description: description,
-      // Garantir que o valor seja sempre um número com 2 casas decimais
+    // Criar a cobrança
+    const paymentBody = {
+      customer: data.customer,
+      billingType: 'PIX',
       value: Number(Number(data.value).toFixed(2)),
-      format: data.format || 'ALL',
-      expirationDate: data.expirationDate || getDefaultExpirationDate(),
-      allowsMultiplePayments: data.allowsMultiplePayments || false
+      dueDate: data.dueDate || getDefaultExpirationDate(),
+      description: data.description
     };
 
-    console.log('Dados do PIX estático:', {
-      description: body.description,
-      value: body.value,
-      format: body.format,
-      expirationDate: body.expirationDate,
-      allowsMultiplePayments: body.allowsMultiplePayments
+    console.log('Criando cobrança PIX:', {
+      customer: paymentBody.customer,
+      value: paymentBody.value,
+      dueDate: paymentBody.dueDate
     });
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(body),
-        cache: 'no-store'
+    // Criar a cobrança
+    const paymentResponse = await fetch(paymentUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(paymentBody),
+      cache: 'no-store'
+    });
+
+    if (!paymentResponse.ok) {
+      const errorText = await paymentResponse.text();
+      console.error('Erro ao criar cobrança:', {
+        status: paymentResponse.status,
+        body: errorText
       });
-
-      console.log('Status da resposta:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Erro na resposta:', {
-          status: response.status,
-          body: errorText
-        });
-        throw new Error(`Erro na API Asaas: ${response.status} - ${errorText || response.statusText}`);
-      }
-
-      const responseText = await response.text();
-      
-      if (!responseText || responseText.trim() === '') {
-        console.error('Resposta vazia recebida do servidor');
-        throw new Error('Resposta vazia do servidor Asaas');
-      }
-
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (e) {
-        console.error('Erro ao processar resposta da API:', e);
-        throw new Error('Erro ao processar resposta do servidor');
-      }
-
-      if (!responseData.encodedImage || !responseData.payload) {
-        console.error('Resposta inválida:', responseData);
-        throw new Error('Resposta inválida do servidor Asaas');
-      }
-
-      // Log apenas do ID para rastreamento
-      console.log('QR Code PIX estático gerado com sucesso:', {
-        id: responseData.id,
-        hasEncodedImage: !!responseData.encodedImage,
-        hasPayload: !!responseData.payload
-      });
-
-      return responseData;
-    } catch (fetchError) {
-      console.error('Erro na requisição Asaas:', fetchError);
-      throw new Error(
-        fetchError instanceof Error 
-          ? fetchError.message 
-          : 'Erro na comunicação com o servidor Asaas'
-      );
+      throw new Error(`Erro ao criar cobrança: ${paymentResponse.status} - ${errorText || paymentResponse.statusText}`);
     }
+
+    const payment = await paymentResponse.json();
+    
+    if (!payment.id) {
+      throw new Error('ID da cobrança não retornado');
+    }
+
+    // 2. Gerar o QR Code PIX
+    const qrCodeUrl = `${process.env.NEXT_PUBLIC_ASAAS_API_URL}/payments/${payment.id}/pixQrCode`;
+    
+    console.log('Gerando QR Code para cobrança:', payment.id);
+
+    const qrCodeResponse = await fetch(qrCodeUrl, {
+      method: 'GET',
+      headers,
+      cache: 'no-store'
+    });
+
+    if (!qrCodeResponse.ok) {
+      const errorText = await qrCodeResponse.text();
+      console.error('Erro ao gerar QR Code:', {
+        status: qrCodeResponse.status,
+        body: errorText
+      });
+      throw new Error(`Erro ao gerar QR Code: ${qrCodeResponse.status} - ${errorText || qrCodeResponse.statusText}`);
+    }
+
+    const qrCodeData = await qrCodeResponse.json();
+
+    // Combinar os dados da cobrança com o QR Code
+    return {
+      id: payment.id,
+      status: payment.status,
+      value: payment.value,
+      netValue: payment.netValue,
+      description: payment.description,
+      encodedImage: qrCodeData.encodedImage,
+      payload: qrCodeData.payload,
+      expirationDate: payment.dueDate
+    };
+
   } catch (error) {
-    // Não expor detalhes do erro na produção
-    console.error('Erro ao processar pagamento PIX estático:', error);
+    console.error('Erro ao processar pagamento PIX:', error);
     throw error;
   }
 }
@@ -411,14 +384,11 @@ export async function checkPaymentStatus(paymentId: string): Promise<PaymentStat
   try {
     console.log('Verificando status do pagamento...', { paymentId });
 
+    // Usar o endpoint correto do Asaas
     const url = `${ASAAS_CONFIG.API_URL}/payments/${paymentId}`;
     console.log('URL da API:', url);
 
     const headers = ASAAS_CONFIG.getHeaders();
-    console.log('Headers configurados:', {
-      ...headers,
-      access_token: headers.access_token ? '***' : undefined
-    });
 
     const response = await fetch(url, {
       method: 'GET',
@@ -426,49 +396,16 @@ export async function checkPaymentStatus(paymentId: string): Promise<PaymentStat
       cache: 'no-store'
     });
 
-    // Capturar o corpo da resposta como texto primeiro
-    const responseText = await response.text();
-    console.log('Resposta bruta (primeiros 100 caracteres):', responseText.substring(0, 100));
-    
-    let data;
-    try {
-      // Tentar parsear como JSON
-      data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('Erro ao parsear resposta JSON:', parseError);
-      // Criar um objeto de status padrão para evitar falhas
-      return {
-        id: paymentId,
-        status: 'PENDING',
-        value: 0,
-        netValue: 0,
-        description: 'Pagamento em processamento',
-        billingType: 'PIX',
-        confirmedDate: null,
-        paymentDate: null
-      };
-    }
-    
     if (!response.ok) {
       console.error('Erro na resposta do Asaas:', {
         status: response.status,
-        statusText: response.statusText,
-        data: data
+        statusText: response.statusText
       });
-      
-      // Mesmo em caso de erro, retornar um status válido para não quebrar a interface
-      return {
-        id: paymentId,
-        status: 'PENDING',
-        value: 0,
-        netValue: 0,
-        description: 'Pagamento em processamento',
-        billingType: 'PIX',
-        confirmedDate: null,
-        paymentDate: null
-      };
+      throw new Error(`Erro ao verificar status: ${response.status}`);
     }
 
+    const data = await response.json();
+    
     console.log('Status verificado com sucesso:', {
       id: data.id,
       status: data.status
@@ -486,17 +423,7 @@ export async function checkPaymentStatus(paymentId: string): Promise<PaymentStat
     };
   } catch (error) {
     console.error('Erro ao verificar status:', error);
-    // Retornar um status padrão para evitar quebrar a interface
-    return {
-      id: paymentId,
-      status: 'PENDING',
-      value: 0,
-      netValue: 0,
-      description: 'Pagamento em processamento',
-      billingType: 'PIX',
-      confirmedDate: null,
-      paymentDate: null
-    };
+    throw error;
   }
 }
 

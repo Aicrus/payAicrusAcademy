@@ -1,14 +1,21 @@
 import { supabase } from '@/lib/supabase';
 
-interface TransactionMetaData {
+export interface TransactionMetaData {
+  cpf?: string;
+  name?: string;
   email?: string;
+  asaasId?: string;
+  dialCode?: string;
   whatsapp?: string;
   produto?: {
     valor: number;
   };
-  parcelas?: number;
-  lgpdConsent?: boolean;
-  lgpdConsentDate?: string;
+  valorAtualizado?: boolean;
+  // Campos específicos do PIX
+  statusAsaas?: string;
+  valorPago?: number;
+  dataPagamento?: string | null;
+  dataConfirmacao?: string | null;
 }
 
 export interface Transaction {
@@ -29,8 +36,8 @@ const TRANSACTION_CACHE_KEY = 'currentTransaction';
 
 export interface TransactionData {
   id?: string;
-  userId: string | number;
-  productId: string | number;
+  users: number;
+  produto: number;
   amount?: number;
   valor?: number;
   status: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH';
@@ -38,8 +45,7 @@ export interface TransactionData {
   metodoPagamento?: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
   idPayAsaas?: string;
   idCustomerAsaas?: string;
-  users?: number;
-  produto?: number;
+  dataHora?: string;
   metaData?: TransactionMetaData;
 }
 
@@ -51,8 +57,8 @@ export class TransactionService {
         valor: data.valor || data.amount,
         status: data.status,
         metodoPagamento: data.metodoPagamento || data.paymentMethod,
-        users: data.userId,
-        produto: data.productId,
+        users: data.users,
+        produto: data.produto,
         idCustomerAsaas: data.idCustomerAsaas,
         metaData: data.metaData || {}
       };
@@ -85,7 +91,7 @@ export class TransactionService {
       const mappedData = {
         valor: data.valor || data.amount,
         metodoPagamento: data.metodoPagamento || data.paymentMethod,
-        produto: data.productId,
+        produto: data.produto,
         idPayAsaas: data.idPayAsaas,
         metaData: data.metaData,
         status: data.status
