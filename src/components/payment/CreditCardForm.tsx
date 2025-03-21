@@ -17,7 +17,7 @@ import { motion } from 'framer-motion';
 import { useProduto } from '@/contexts/ProdutoContext';
 import { useParcelamento } from '@/hooks/useParcelamento';
 import { TransactionService } from '@/services/transaction';
-import { formatarCPF, formatarTelefone, formatarCEP } from '@/utils/formatters';
+import { formatarCPF, formatarTelefone, formatarCEP, formatarMoeda } from '@/utils/formatters';
 import { detectCardBrand, formatCardNumber, CardBrand } from '@/utils/cardUtils';
 import Image from 'next/image';
 import type { TransactionData } from '@/services/transaction';
@@ -596,17 +596,17 @@ export default function CreditCardForm() {
                 className="block w-full pl-3 pr-10 rounded-lg text-gray-900 bg-white transition-all duration-200 border border-gray-200 hover:border-gray-300 focus:border-[#0F2B1B] sm:text-sm h-11 outline-none focus:outline-none focus:ring-0 shadow-[0_0_0_1px_rgba(0,0,0,0.08)] appearance-none"
               >
                 {podeParcelar ? (
-                  parcelas.map((parcela) => (
+                  parcelas.slice().reverse().map((parcela) => (
                     <option key={parcela.numeroParcela} value={parcela.numeroParcela}>
                       {parcela.numeroParcela === 1 
-                        ? `À vista - R$ ${parcela.valorParcela.toFixed(2).replace('.', ',')}` 
-                        : `${parcela.numeroParcela}x de R$ ${parcela.valorParcela.toFixed(2).replace('.', ',')}`}
+                        ? `À vista - R$ ${formatarMoeda(parcela.valorParcela)}` 
+                        : `${parcela.numeroParcela}x de R$ ${formatarMoeda(parcela.valorParcela)}`}
                       {parcela.numeroParcela > 1 ? '*' : ''}
                     </option>
                   ))
                 ) : (
                   <option value={1}>
-                    À vista - R$ {(produto?.valor || 0).toFixed(2).replace('.', ',')}
+                    À vista - R$ {formatarMoeda(produto?.valor || 0)}
                   </option>
                 )}
               </select>

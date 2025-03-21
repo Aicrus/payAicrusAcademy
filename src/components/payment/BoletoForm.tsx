@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { useProduto } from '@/contexts/ProdutoContext';
 import { TransactionService } from '@/services/transaction';
 import type { TransactionData } from '@/services/transaction';
+import { formatarMoeda } from '@/utils/formatters';
 
 interface BoletoPaymentResponse {
   paymentId: string;
@@ -287,7 +288,7 @@ export default function BoletoForm() {
                   <div>
                     <h4 className="text-sm font-medium text-[#0F2B1B]">Informações do Boleto</h4>
                     <ul className="mt-2 text-sm text-gray-600 space-y-1">
-                      <li>✓ Valor: R$ {(produto?.valor || 0).toFixed(2).replace('.', ',')}</li>
+                      <li>✓ Valor: R$ {formatarMoeda(produto?.valor || 0)}</li>
                       <li>✓ Vencimento em 3 dias úteis</li>
                       <li>✓ Pode ser pago em qualquer banco</li>
                       <li>✓ Acesso liberado após compensação</li>
@@ -348,7 +349,7 @@ export default function BoletoForm() {
                 <div>
                   <h4 className="text-sm font-medium text-[#0F2B1B]">Informações do Boleto</h4>
                   <ul className="mt-2 text-sm text-gray-600 space-y-1">
-                    <li>✓ Valor: R$ {(produto?.valor || 0).toFixed(2).replace('.', ',')}</li>
+                    <li>✓ Valor: R$ {formatarMoeda(produto?.valor || 0)}</li>
                     <li>✓ Vencimento em 3 dias úteis</li>
                     <li>✓ Pode ser pago em qualquer banco</li>
                     <li>✓ Acesso liberado após compensação</li>

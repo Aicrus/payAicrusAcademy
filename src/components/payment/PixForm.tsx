@@ -10,6 +10,7 @@ import PaymentStatus from './PaymentStatus';
 import { TransactionService } from '@/services/transaction';
 import type { TransactionData, Transaction } from '@/services/transaction';
 import { safeLog } from '@/utils/logger';
+import { formatarMoeda } from '@/utils/formatters';
 
 interface PixPaymentResponse {
   paymentId: string;
@@ -709,7 +710,7 @@ export default function PixForm() {
               </li>
               <li className="flex items-start">
                 <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">4</span>
-                <span>Confirme o valor de R$ {produto?.valor.toFixed(2)}</span>
+                <span>Confirme o valor de R$ {formatarMoeda(produto?.valor || 0)}</span>
               </li>
               <li className="flex items-start">
                 <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">5</span>
