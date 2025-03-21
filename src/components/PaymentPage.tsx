@@ -203,7 +203,7 @@ export default function PaymentPage() {
               <div className="space-y-3 mb-1">
                 <div className="text-white/50 text-[8px] sm:text-[9px] space-y-0.5">
                   <p>
-                    Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <span className="underline cursor-pointer">Termos</span> e a <span className="underline cursor-pointer">Política de Privacidade</span>.
+                    Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <a href="/termos" className="underline font-bold cursor-pointer hover:text-white/80 transition-colors">Termos</a> e a <a href="/privacidade" className="underline font-bold cursor-pointer hover:text-white/80 transition-colors">Política de Privacidade</a>.
                   </p>
                   <p>
                     Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
@@ -356,7 +356,7 @@ export default function PaymentPage() {
               {/* Mobile View - Texto legal */}
               <div className="lg:hidden mt-6 space-y-0.5 text-gray-500 text-[8px] sm:text-[9px]">
                 <p>
-                  Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <span className="underline cursor-pointer">Termos</span> e a <span className="underline cursor-pointer">Política de Privacidade</span>.
+                  Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <a href="/termos" className="underline font-bold cursor-pointer hover:text-gray-700 transition-colors">Termos</a> e a <a href="/privacidade" className="underline font-bold cursor-pointer hover:text-gray-700 transition-colors">Política de Privacidade</a>.
                 </p>
                 <p>
                   Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
