@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       creditCardHolderInfo: {
         ...creditCardHolderInfo,
         // Adicionar informações de consentimento LGPD
-        observationToCustomer: 'Usuário aceitou os termos de uso e política de privacidade, autorizando o processamento dos dados para pagamento.'
+        observationToCustomer: 'Autorizo o processamento dos meus dados para esta e futuras cobranças, facilitando pagamentos posteriores.'
       },
       installmentCount: installmentCount || 1,
       installmentValue: installmentValue || value,

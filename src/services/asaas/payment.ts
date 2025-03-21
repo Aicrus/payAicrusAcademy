@@ -29,6 +29,17 @@ export interface AsaasPaymentData {
 export interface AsaasPayment {
   id: string;
   status: string;
+  value?: number;
+  netValue?: number;
+  description?: string;
+  billingType?: string;
+  pixTransaction?: any;
+  dueDate?: string;
+  paymentDate?: string;
+  clientPaymentDate?: string;
+  invoiceUrl?: string;
+  bankSlipUrl?: string;
+  transactionReceiptUrl?: string;
 }
 
 export interface AsaasPixQrCode {
@@ -261,18 +272,32 @@ export async function createAsaasPayment(data: AsaasPaymentData): Promise<AsaasP
     const response = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(paymentData)
+      body: JSON.stringify(paymentData),
+      cache: 'no-store'
     });
 
-    const responseData = await response.json();
-    
     if (!response.ok) {
-      console.error('Erro na resposta do Asaas:', {
+      const errorText = await response.text();
+      console.error('Erro na resposta:', {
         status: response.status,
-        statusText: response.statusText,
-        data: responseData
+        body: errorText
       });
-      throw new Error(responseData.errors?.[0]?.description || 'Erro ao criar pagamento');
+      throw new Error(`Erro na API Asaas: ${response.status} - ${errorText || response.statusText}`);
+    }
+
+    const responseText = await response.text();
+      
+    if (!responseText || responseText.trim() === '') {
+      console.error('Resposta vazia recebida do servidor');
+      throw new Error('Resposta vazia do servidor Asaas');
+    }
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Erro ao processar resposta da API:', e);
+      throw new Error('Erro ao processar resposta do servidor');
     }
 
     console.log('Pagamento criado com sucesso:', {
@@ -280,10 +305,7 @@ export async function createAsaasPayment(data: AsaasPaymentData): Promise<AsaasP
       status: responseData.status
     });
 
-    return {
-      id: responseData.id,
-      status: responseData.status
-    };
+    return responseData;
   } catch (error) {
     console.error('Erro ao criar pagamento:', error);
     throw error;
@@ -350,18 +372,51 @@ export async function checkPaymentStatus(paymentId: string): Promise<PaymentStat
 
     const response = await fetch(url, {
       method: 'GET',
-      headers
+      headers,
+      cache: 'no-store'
     });
 
-    const data = await response.json();
+    // Capturar o corpo da resposta como texto primeiro
+    const responseText = await response.text();
+    console.log('Resposta bruta (primeiros 100 caracteres):', responseText.substring(0, 100));
+    
+    let data;
+    try {
+      // Tentar parsear como JSON
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Erro ao parsear resposta JSON:', parseError);
+      // Criar um objeto de status padrão para evitar falhas
+      return {
+        id: paymentId,
+        status: 'PENDING',
+        value: 0,
+        netValue: 0,
+        description: 'Pagamento em processamento',
+        billingType: 'PIX',
+        confirmedDate: null,
+        paymentDate: null
+      };
+    }
     
     if (!response.ok) {
       console.error('Erro na resposta do Asaas:', {
         status: response.status,
         statusText: response.statusText,
-        data
+        data: data
       });
-      throw new Error(data.errors?.[0]?.description || 'Erro ao verificar status do pagamento');
+      
+      // Mesmo em caso de erro, retornar um status válido para não quebrar a interface
+      return {
+        id: paymentId,
+        status: 'PENDING',
+        value: 0,
+        netValue: 0,
+        description: 'Pagamento em processamento',
+        billingType: 'PIX',
+        confirmedDate: null,
+        paymentDate: null
+      };
     }
 
     console.log('Status verificado com sucesso:', {
@@ -371,17 +426,27 @@ export async function checkPaymentStatus(paymentId: string): Promise<PaymentStat
 
     return {
       id: data.id,
-      status: data.status,
-      value: data.value,
-      netValue: data.netValue,
-      description: data.description,
-      billingType: data.billingType,
-      confirmedDate: data.confirmedDate,
-      paymentDate: data.paymentDate
+      status: data.status || 'PENDING',
+      value: data.value || 0,
+      netValue: data.netValue || 0,
+      description: data.description || 'Pagamento',
+      billingType: data.billingType || 'PIX',
+      confirmedDate: data.confirmedDate || null,
+      paymentDate: data.paymentDate || null
     };
   } catch (error) {
     console.error('Erro ao verificar status:', error);
-    throw error;
+    // Retornar um status padrão para evitar quebrar a interface
+    return {
+      id: paymentId,
+      status: 'PENDING',
+      value: 0,
+      netValue: 0,
+      description: 'Pagamento em processamento',
+      billingType: 'PIX',
+      confirmedDate: null,
+      paymentDate: null
+    };
   }
 }
 
@@ -549,5 +614,67 @@ export async function getBoletoIdentification(paymentId: string): Promise<Boleto
       nossoNumero: "",
       barCode: ""
     };
+  }
+}
+
+export interface PixQrCodeResponse {
+  success: boolean;
+  encodedImage: string;
+  payload: string;
+  expirationDate: string;
+}
+
+export async function getPixQrCode(paymentId: string): Promise<PixQrCodeResponse> {
+  try {
+    console.log('Obtendo QR Code para pagamento PIX...', { paymentId });
+
+    const url = `${ASAAS_CONFIG.API_URL}/payments/${paymentId}/pixQrCode`;
+    console.log('URL da API:', url);
+
+    const headers = ASAAS_CONFIG.getHeaders();
+    console.log('Headers configurados:', {
+      ...headers,
+      access_token: headers.access_token ? '***' : undefined
+    });
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+      cache: 'no-store'
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Erro na resposta:', {
+        status: response.status,
+        body: errorText
+      });
+      throw new Error(`Erro na API Asaas: ${response.status} - ${errorText || response.statusText}`);
+    }
+
+    const responseText = await response.text();
+      
+    if (!responseText || responseText.trim() === '') {
+      console.error('Resposta vazia recebida do servidor');
+      throw new Error('Resposta vazia do servidor Asaas');
+    }
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Erro ao processar resposta da API:', e);
+      throw new Error('Erro ao processar resposta do servidor');
+    }
+
+    return {
+      success: true,
+      encodedImage: responseData.encodedImage,
+      payload: responseData.payload,
+      expirationDate: responseData.expirationDate
+    };
+  } catch (error) {
+    console.error('Erro ao obter QR Code PIX:', error);
+    throw error;
   }
 } 

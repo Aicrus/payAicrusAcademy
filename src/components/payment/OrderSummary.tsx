@@ -36,7 +36,7 @@ export default function OrderSummary() {
         </div>
 
         <div className="flex justify-between text-base font-medium text-gray-900">
-          <p>Total devido hoje</p>
+          <p>Valor total</p>
           <p>R$ 997,00</p>
         </div>
 

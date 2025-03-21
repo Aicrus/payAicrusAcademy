@@ -182,7 +182,7 @@ export default function PaymentPage() {
   }, [produto?.id]); // Adiciona produto.id como dependência
 
   if (!produto) {
-    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+    return <div className="min-h-screen flex items-center justify-center bg-white text-gray-500">Carregando...</div>;
   }
 
   return (

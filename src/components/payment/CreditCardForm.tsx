@@ -21,6 +21,7 @@ import { formatarCPF, formatarTelefone, formatarCEP } from '@/utils/formatters';
 import { detectCardBrand, formatCardNumber, CardBrand } from '@/utils/cardUtils';
 import Image from 'next/image';
 import type { TransactionData } from '@/services/transaction';
+import PaymentStatus from './PaymentStatus';
 
 interface CreditCardFormData {
   holderName: string;
@@ -50,7 +51,7 @@ interface CreditCardPaymentResponse {
 export default function CreditCardForm() {
   const { userInfo, isInfoLocked } = usePayment();
   const { produto } = useProduto();
-  const { podeParcelar, parcelas } = useParcelamento(produto?.precoDesconto || 0);
+  const { podeParcelar, parcelas } = useParcelamento(produto?.valor || 0);
   
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +70,11 @@ export default function CreditCardForm() {
     phone: ''
   });
   const [showAdditionalFields, setShowAdditionalFields] = useState(false);
-  const [lgpdConsent, setLgpdConsent] = useState(false);
+  const [lgpdConsent, setLgpdConsent] = useState(true);
+  const [paymentStatus, setPaymentStatus] = useState<{
+    id: string;
+    status: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH';
+  } | null>(null);
 
   useEffect(() => {
     const checkCardFieldsComplete = () => {
@@ -150,8 +155,18 @@ export default function CreditCardForm() {
     }
 
     // Validar valor mínimo
-    if (produto.precoDesconto < 5) {
+    const valorProduto = produto?.valor || 0;
+    if (valorProduto < 5) {
       setError('O valor mínimo para pagamento com cartão é de R$ 5,00');
+      return;
+    } else if (valorProduto < 10) {
+      setError('Pagamento apenas à vista.');
+      return;
+    } else if (valorProduto < 20) {
+      setError('Parcelado em até 2x.');
+      return;
+    } else if (valorProduto < 50) {
+      setError('Parcelado em até 3x.');
       return;
     }
 
@@ -181,22 +196,36 @@ export default function CreditCardForm() {
         if (pendingTransaction && pendingTransaction.id) {
           console.log('Transação pendente encontrada:', pendingTransaction);
           
+          // Verificar se o valor da transação está atualizado com o valor atual do produto
+          const valorAtualizado = pendingTransaction.valor === produto.valor;
+          
+          if (!valorAtualizado) {
+            console.log('Valor do produto foi alterado, atualizando transação:', {
+              valorAntigo: pendingTransaction.valor,
+              valorNovo: produto.valor
+            });
+          }
+          
           // Atualizar transação existente para cartão
           try {
             await TransactionService.updateTransaction(pendingTransaction.id, {
-              valor: produto.precoDesconto,
+              valor: produto.valor,
               produto: produto.id,
-              paymentMethod: 'CREDIT_CARD',
+              metodoPagamento: 'CREDIT_CARD',
               metaData: {
                 ...pendingTransaction.metaData,
                 produto: {
-                  preco: produto.precoDesconto
-                }
+                  valor: produto.valor
+                },
+                valorAtualizado: true
               }
             });
             
             transaction = pendingTransaction;
-            console.log('Transação atualizada para cartão');
+            console.log('Transação atualizada para cartão:', {
+              id: transaction.id,
+              valorAtualizado: produto.valor
+            });
           } catch (updateError) {
             console.error('Erro ao atualizar valor da transação:', updateError);
             // Se falhar em atualizar, criar nova transação
@@ -208,9 +237,9 @@ export default function CreditCardForm() {
       // Se não encontrou transação pendente, cria uma nova
       if (!transaction) {
         const transactionData: TransactionData = {
-          amount: produto.precoDesconto,
+          valor: produto.valor,
           status: 'PENDING',
-          paymentMethod: 'CREDIT_CARD',
+          metodoPagamento: 'CREDIT_CARD',
           userId: userData.id,
           productId: produto.id,
           idCustomerAsaas: userInfo.asaasId,
@@ -218,7 +247,7 @@ export default function CreditCardForm() {
             email: userInfo.email,
             whatsapp: userInfo.whatsapp,
             produto: {
-              preco: produto.precoDesconto
+              valor: produto.valor
             },
             parcelas: selectedInstallment,
             lgpdConsent: true,
@@ -269,10 +298,9 @@ export default function CreditCardForm() {
       }
 
       try {
-        const paymentData = {
-          customerId: userInfo.asaasId,
-          description: `Assinatura Aicrus Academy - ${userInfo.email}`,
-          value: parcelaInfo.valorTotal,
+        // Passo 1: Preparar dados para tokenização
+        const tokenizeData = {
+          customer: userInfo.asaasId,
           creditCard: {
             holderName: formData.holderName,
             number: cardNumber,
@@ -290,21 +318,53 @@ export default function CreditCardForm() {
             phone: formData.phone.replace(/\D/g, ''),
             mobilePhone: formData.phone.replace(/\D/g, '')
           },
+          usersAicrusAcademy: userData.id
+        };
+
+        console.log('Dados para tokenização:', {
+          ...tokenizeData,
+          creditCard: {
+            ...tokenizeData.creditCard,
+            number: '****' + tokenizeData.creditCard.number.slice(-4),
+            ccv: '***'
+          }
+        });
+
+        // Passo 2: Tokenizar o cartão
+        const responseTokenize = await fetch('/api/asaas/credit-card/tokenize', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(tokenizeData)
+        });
+
+        if (!responseTokenize.ok) {
+          const errorTokenize = await responseTokenize.json();
+          throw new Error(errorTokenize.error || 'Erro ao tokenizar cartão');
+        }
+
+        const tokenData = await responseTokenize.json();
+        console.log('Cartão tokenizado com sucesso:', {
+          creditCardToken: tokenData.creditCardToken,
+          creditCardNumber: tokenData.creditCardNumber,
+          creditCardBrand: tokenData.creditCardBrand
+        });
+
+        // Passo 3: Fazer pagamento usando o token
+        const paymentData = {
+          customerId: userInfo.asaasId,
+          description: `Assinatura Aicrus Academy - ${userInfo.email}`,
+          value: parcelaInfo.valorTotal,
+          creditCardToken: tokenData.creditCardToken,
           installmentCount: selectedInstallment,
           installmentValue: parcelaInfo.valorParcela,
           transactionId: transaction.id
         };
 
-        console.log('Dados do pagamento:', {
-          ...paymentData,
-          creditCard: {
-            ...paymentData.creditCard,
-            number: '****' + paymentData.creditCard.number.slice(-4),
-            ccv: '***'
-          }
-        });
+        console.log('Dados do pagamento com token:', paymentData);
 
-        const responseCreditCard = await fetch('/api/asaas/credit-card', {
+        const responseCreditCard = await fetch('/api/payments/tokenized', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -317,16 +377,7 @@ export default function CreditCardForm() {
           console.error('Detalhes da resposta:', {
             status: responseCreditCard.status,
             statusText: responseCreditCard.statusText,
-            responseBody: errorData,
-            rawError: JSON.stringify(errorData),
-            requestData: {
-              ...paymentData,
-              creditCard: {
-                ...paymentData.creditCard,
-                number: '****' + paymentData.creditCard.number.slice(-4),
-                ccv: '***'
-              }
-            }
+            responseBody: errorData
           });
 
           let errorMessage = 'Erro ao processar pagamento';
@@ -361,13 +412,18 @@ export default function CreditCardForm() {
               console.error('Erro ao finalizar transação:', error);
             }
           }
+
+          // Atualizar o status do pagamento para mostrar no componente PaymentStatus
+          setPaymentStatus({
+            id: data.paymentId,
+            status: data.status as 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH'
+          });
+          
+          setLoading(false);
         } catch (updateError) {
           console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
           // Não interromper o fluxo por erro na atualização
         }
-
-        // Redirecionar para URL de sucesso
-        window.location.href = process.env.NEXT_PUBLIC_SUCCESS_URL || 'https://www.aicrustech.com/';
       } catch (err) {
         console.error('Erro completo ao processar pagamento:', err);
         setError(
@@ -375,7 +431,6 @@ export default function CreditCardForm() {
             ? err.message 
             : 'Erro ao processar pagamento. Por favor, tente novamente.'
         );
-      } finally {
         setLoading(false);
       }
     } catch (err) {
@@ -388,6 +443,37 @@ export default function CreditCardForm() {
       setLoading(false);
     }
   };
+
+  // Substituir o modal por PaymentStatus quando o pagamento for processado com sucesso
+  if (paymentStatus && ['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(paymentStatus.status)) {
+    return (
+      <motion.div
+        className="space-y-6"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="bg-gray-50 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3 text-sm text-gray-500">
+              <CreditCardIcon className="h-5 w-5 text-gray-400" />
+              <span>Pagamento processado para:</span>
+              <span className="font-medium text-gray-900">{userInfo?.email}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="space-y-6">
+            <PaymentStatus 
+              status={paymentStatus.status} 
+              buttonText="Acessar meu produto"
+            />
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   if (!isInfoLocked) {
     return (
@@ -412,14 +498,14 @@ export default function CreditCardForm() {
                 <h3 className="text-lg font-medium text-gray-900">Pagamento com Cartão</h3>
                 <p className="mt-2 text-sm text-gray-600">
                   {(() => {
-                    const precoDesconto = produto?.precoDesconto || 0;
-                    if (precoDesconto < 5) {
+                    const valorProduto = produto?.valor || 0;
+                    if (valorProduto < 5) {
                       return 'Valor mínimo para pagamento com cartão é R$ 5,00';
-                    } else if (precoDesconto < 10) {
+                    } else if (valorProduto < 10) {
                       return 'Pagamento apenas à vista.';
-                    } else if (precoDesconto < 20) {
+                    } else if (valorProduto < 20) {
                       return 'Parcelado em até 2x.';
-                    } else if (precoDesconto < 50) {
+                    } else if (valorProduto < 50) {
                       return 'Parcelado em até 3x.';
                     } else {
                       return 'Parcelado em até 12x.';
@@ -481,14 +567,14 @@ export default function CreditCardForm() {
             <h3 className="text-lg font-medium text-gray-900">Pagamento com Cartão</h3>
             <p className="mt-2 text-sm text-gray-600">
               {(() => {
-                const precoDesconto = produto?.precoDesconto || 0;
-                if (precoDesconto < 5) {
+                const valorProduto = produto?.valor || 0;
+                if (valorProduto < 5) {
                   return 'Valor mínimo para pagamento com cartão é R$ 5,00';
-                } else if (precoDesconto < 10) {
+                } else if (valorProduto < 10) {
                   return 'Pagamento apenas à vista.';
-                } else if (precoDesconto < 20) {
+                } else if (valorProduto < 20) {
                   return 'Parcelado em até 2x.';
-                } else if (precoDesconto < 50) {
+                } else if (valorProduto < 50) {
                   return 'Parcelado em até 3x.';
                 } else {
                   return 'Parcelado em até 12x.';
@@ -517,7 +603,7 @@ export default function CreditCardForm() {
                   ))
                 ) : (
                   <option value={1}>
-                    1 x de R$ {(produto?.precoDesconto || 0).toFixed(2).replace('.', ',')}
+                    1 x de R$ {(produto?.valor || 0).toFixed(2).replace('.', ',')}
                   </option>
                 )}
               </select>
@@ -791,17 +877,15 @@ export default function CreditCardForm() {
                   type="checkbox"
                   checked={lgpdConsent}
                   onChange={(e) => setLgpdConsent(e.target.checked)}
-                  className="h-4 w-4 text-[#0F2B1B] focus:ring-[#0F2B1B] border-gray-300 rounded"
+                  className="h-4 w-4 text-[#38A169] focus:ring-[#38A169] border-gray-300 rounded"
                 />
               </div>
               <div className="ml-3 text-sm">
                 <label htmlFor="lgpd-consent" className="font-medium text-gray-700">
-                  Autorizo o processamento dos meus dados
+                  Autorizo processamento dos dados
                 </label>
                 <p className="text-gray-500">
-                  Concordo com os <a href="/termos" target="_blank" className="text-[#0F2B1B] underline">Termos de Uso</a> e 
-                  <a href="/privacidade" target="_blank" className="text-[#0F2B1B] underline"> Política de Privacidade</a>. 
-                  Autorizo o compartilhamento dos meus dados com a operadora de pagamento para processamento da transação.
+                  Para esta e futuras cobranças. Concordo com os <a href="/termos" target="_blank" className="text-[#0F2B1B] underline">Termos</a> e <a href="/privacidade" target="_blank" className="text-[#0F2B1B] underline">Privacidade</a>.
                 </p>
               </div>
             </div>
@@ -809,8 +893,12 @@ export default function CreditCardForm() {
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-base font-medium text-white bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B] transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+            disabled={loading || !lgpdConsent}
+            className={`w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-base font-medium text-white transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] ${
+              lgpdConsent 
+                ? "bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B]" 
+                : "bg-gray-400 cursor-not-allowed"
+            }`}
           >
             {loading ? (
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />

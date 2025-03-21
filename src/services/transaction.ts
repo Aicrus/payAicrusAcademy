@@ -4,7 +4,7 @@ interface TransactionMetaData {
   email?: string;
   whatsapp?: string;
   produto?: {
-    preco: number;
+    valor: number;
   };
   parcelas?: number;
   lgpdConsent?: boolean;
@@ -31,12 +31,12 @@ export interface TransactionData {
   id?: string;
   userId: string | number;
   productId: string | number;
-  amount: number;
+  amount?: number;
+  valor?: number;
   status: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH';
-  paymentMethod: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
+  paymentMethod?: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
+  metodoPagamento?: 'PIX' | 'CREDIT_CARD' | 'BOLETO';
   idPayAsaas?: string;
-  valor?: number; // Campo legado
-  metodoPagamento?: string; // Campo legado
   idCustomerAsaas?: string;
   users?: number;
   produto?: number;
@@ -48,9 +48,9 @@ export class TransactionService {
     try {
       // Mapear campos da nova estrutura para a antiga
       const mappedData = {
-        valor: data.amount,
+        valor: data.valor || data.amount,
         status: data.status,
-        metodoPagamento: data.paymentMethod,
+        metodoPagamento: data.metodoPagamento || data.paymentMethod,
         users: data.userId,
         produto: data.productId,
         idCustomerAsaas: data.idCustomerAsaas,
@@ -83,11 +83,12 @@ export class TransactionService {
     try {
       // Mapear campos da nova estrutura para a antiga
       const mappedData = {
-        valor: data.amount,
-        metodoPagamento: data.paymentMethod,
+        valor: data.valor || data.amount,
+        metodoPagamento: data.metodoPagamento || data.paymentMethod,
         produto: data.productId,
         idPayAsaas: data.idPayAsaas,
-        metaData: data.metaData
+        metaData: data.metaData,
+        status: data.status
       };
 
       console.log('Enviando requisição de atualização:', {

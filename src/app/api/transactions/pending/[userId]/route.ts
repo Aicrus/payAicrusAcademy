@@ -49,6 +49,66 @@ export async function GET(
       return NextResponse.json(null);
     }
 
+    // Buscar informações atualizadas do produto
+    if (transaction.produto) {
+      const { data: produto, error: produtoError } = await supabase
+        .from('produtosAicrusAcademy')
+        .select('*')
+        .eq('id', transaction.produto)
+        .single();
+
+      if (!produtoError && produto) {
+        // Verificar se o valor na transação é diferente do valor atual do produto
+        const valorProdutoAtual = produto.valor;
+        
+        // Se o valor na transação for diferente do valor atual do produto
+        if (transaction.valor !== valorProdutoAtual) {
+          console.log('Valor do produto foi atualizado:', {
+            valorAntigo: transaction.valor,
+            valorNovo: valorProdutoAtual,
+            produtoId: produto.id
+          });
+          
+          // Atualizar o valor na transação
+          const { data: transacaoAtualizada, error: updateError } = await supabase
+            .from('transacoes')
+            .update({
+              valor: valorProdutoAtual,
+              dataHora: new Date().toISOString(),
+              metaData: {
+                ...transaction.metaData,
+                produto: {
+                  ...(transaction.metaData?.produto || {}),
+                  valor: valorProdutoAtual
+                },
+                valorAtualizado: true,
+                valorAnterior: transaction.valor
+              }
+            })
+            .eq('id', transaction.id)
+            .select()
+            .single();
+            
+          if (!updateError && transacaoAtualizada) {
+            console.log('Transação atualizada com novo valor do produto:', {
+              id: transacaoAtualizada.id,
+              valorAtualizado: transacaoAtualizada.valor
+            });
+            
+            // Retornar a transação atualizada
+            safeLog('Transação pendente encontrada e atualizada', {
+              id: transacaoAtualizada.id,
+              status: transacaoAtualizada.status,
+              users: transacaoAtualizada.users,
+              valorAtualizado: true
+            });
+            
+            return NextResponse.json(transacaoAtualizada);
+          }
+        }
+      }
+    }
+
     safeLog('Transação pendente encontrada', {
       id: transaction.id,
       status: transaction.status,

@@ -41,6 +41,8 @@ export default function PixForm() {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [autoCheckInterval, setAutoCheckInterval] = useState<NodeJS.Timeout | null>(null);
+  const [autoCheckActive, setAutoCheckActive] = useState(false);
+  const [autoCheckEnded, setAutoCheckEnded] = useState(false);
   const [currentTransaction, setCurrentTransaction] = useState<Transaction | null>(null);
 
   useEffect(() => {
@@ -76,49 +78,110 @@ export default function PixForm() {
     try {
       setIsVerifying(true);
       
-      // Verificar diretamente na tabela de transações
-      if (currentTransaction?.id) {
-        console.log('Verificando status da transação:', currentTransaction.id);
+      // Verificar diretamente na API de pagamentos
+      try {
+        console.log('Verificando status do pagamento:', paymentId);
+        const response = await fetch(`/api/payments/${paymentId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          cache: 'no-store'
+        });
+        
+        if (!response.ok) {
+          console.error(`Erro na resposta HTTP: ${response.status} ${response.statusText}`);
+          const errorText = await response.text();
+          console.error('Corpo da resposta de erro:', errorText?.substring(0, 200) || 'Vazio');
+          throw new Error(`Erro ao verificar status: ${response.status} ${response.statusText}`);
+        }
+        
+        // Obter o texto da resposta e tentar parsear como JSON
+        const responseText = await response.text();
+        let statusData;
         
         try {
-          const response = await fetch(`/api/transactions/${currentTransaction.id}`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          });
+          statusData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('Erro ao parsear resposta JSON:', parseError);
+          console.error('Corpo da resposta:', responseText?.substring(0, 200) || 'Vazio');
+          throw new Error('Resposta inválida do servidor');
+        }
+        
+        console.log('Status do pagamento:', statusData);
+        
+        if (statusData && statusData.status) {
+          // Atualizar o status do pagamento
+          setPaymentStatus(prevStatus => ({
+            ...prevStatus!,
+            status: statusData.status,
+            confirmedDate: statusData.confirmedDate || null,
+            paymentDate: statusData.paymentDate || null
+          }));
           
-          if (!response.ok) {
-            throw new Error(`Erro ao buscar transação: ${response.status} ${response.statusText}`);
-          }
-          
-          const transactionData = await response.json();
-          console.log('Dados da transação:', transactionData);
-          
-          if (transactionData && transactionData.status) {
-            // Atualizar o status do pagamento
-            setPaymentStatus(prevStatus => ({
-              ...prevStatus!,
-              status: transactionData.status,
-              confirmedDate: transactionData.dataHora || null,
-              paymentDate: transactionData.dataHora || null
-            }));
-            
-            // Se o pagamento foi confirmado, finalizar a transação
-            if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(transactionData.status)) {
-              console.log('Pagamento confirmado, finalizando transação...');
-              try {
-                await TransactionService.finalizeTransaction(transactionData.id);
-                console.log('Transação finalizada com sucesso');
-              } catch (error) {
-                console.error('Erro ao finalizar transação:', error);
+          // Atualizar a transação com o status recebido
+          if (currentTransaction?.id) {
+            try {
+              await TransactionService.updateTransaction(String(currentTransaction.id), {
+                status: statusData.status,
+              });
+              console.log('Status da transação atualizado para:', statusData.status);
+              
+              // Se o pagamento foi confirmado, finalizar a transação
+              if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(statusData.status)) {
+                console.log('Pagamento confirmado, finalizando transação...');
+                try {
+                  // Converter o ID para número antes de passar para a função
+                  const transactionId = Number(currentTransaction.id);
+                  await TransactionService.finalizeTransaction(transactionId);
+                  console.log('Transação finalizada com sucesso');
+                } catch (error) {
+                  console.error('Erro ao finalizar transação:', error);
+                }
               }
+            } catch (updateError) {
+              console.error('Erro ao atualizar status da transação:', updateError);
+            }
+          }
+          
+          return statusData.status;
+        }
+      } catch (apiError) {
+        console.error('Erro ao verificar status via API:', apiError);
+        
+        // Caso a API falhe, tenta verificar na tabela de transações como fallback
+        if (currentTransaction?.id) {
+          console.log('Tentando verificar status na tabela de transações:', currentTransaction.id);
+          
+          try {
+            const response = await fetch(`/api/transactions/${currentTransaction.id}`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (!response.ok) {
+              throw new Error(`Erro ao buscar transação: ${response.status} ${response.statusText}`);
             }
             
-            return transactionData.status;
+            const transactionData = await response.json();
+            console.log('Dados da transação:', transactionData);
+            
+            if (transactionData && transactionData.status) {
+              // Atualizar o status do pagamento
+              setPaymentStatus(prevStatus => ({
+                ...prevStatus!,
+                status: transactionData.status,
+                confirmedDate: transactionData.dataHora || null,
+                paymentDate: transactionData.dataHora || null
+              }));
+              
+              return transactionData.status;
+            }
+          } catch (fallbackError) {
+            console.error('Erro ao buscar transação (fallback):', fallbackError);
           }
-        } catch (error) {
-          console.error('Erro ao buscar transação:', error);
         }
       }
       
@@ -137,6 +200,8 @@ export default function PixForm() {
     }
     
     console.log('Iniciando verificação automática para o pagamento:', paymentId);
+    setAutoCheckActive(true);
+    setAutoCheckEnded(false);
     
     // Verificar imediatamente uma vez
     checkPaymentStatus(paymentId);
@@ -157,11 +222,15 @@ export default function PixForm() {
         console.log('Pagamento confirmado, parando verificação automática');
         clearInterval(interval);
         setAutoCheckInterval(null);
+        setAutoCheckActive(false);
+        setAutoCheckEnded(true);
       } else if (checkCount.current >= maxChecks) {
         // Parar após 4 verificações
         console.log('Máximo de verificações atingido, parando verificação automática');
         clearInterval(interval);
         setAutoCheckInterval(null);
+        setAutoCheckActive(false);
+        setAutoCheckEnded(true);
       }
     }, checkInterval);
 
@@ -203,7 +272,7 @@ export default function PixForm() {
       safeLog('Iniciando geração de PIX com dados', {
         email: userInfo.email,
         asaasId: userInfo.asaasId,
-        valor: produto.precoDesconto
+        valor: produto.valor
       });
 
       const response = await fetch(`/api/asaas/customers/${userInfo.asaasId}`);
@@ -231,21 +300,35 @@ export default function PixForm() {
         if (pendingTransaction && pendingTransaction.id) {
           safeLog('Transação pendente encontrada', pendingTransaction);
           
+          // Verificar se o valor da transação está atualizado com o valor atual do produto
+          const valorAtualizado = pendingTransaction.valor === produto.valor;
+          
+          if (!valorAtualizado) {
+            safeLog('Valor do produto foi alterado, atualizando transação', {
+              valorAntigo: pendingTransaction.valor,
+              valorNovo: produto.valor
+            });
+          }
+          
           try {
             await TransactionService.updateTransaction(pendingTransaction.id, {
-              valor: produto.precoDesconto,
+              valor: produto.valor,
               produto: produto.id,
-              paymentMethod: 'PIX',
+              metodoPagamento: 'PIX',
               metaData: {
                 ...pendingTransaction.metaData,
                 produto: {
-                  preco: produto.precoDesconto
-                }
+                  valor: produto.valor
+                },
+                valorAtualizado: true
               }
             });
             
             transaction = pendingTransaction;
-            safeLog('Transação atualizada para PIX');
+            safeLog('Transação atualizada para PIX', {
+              id: transaction.id,
+              valorAtualizado: produto.valor
+            });
           } catch (updateError) {
             console.error('Erro ao atualizar valor da transação:', updateError);
             pendingTransaction = null;
@@ -255,19 +338,18 @@ export default function PixForm() {
 
       if (!transaction) {
         const transactionData: TransactionData = {
-          amount: produto.precoDesconto,
+          valor: produto.valor,
           status: 'PENDING',
-          paymentMethod: 'PIX',
+          metodoPagamento: 'PIX',
           userId: userData.id,
           productId: produto.id,
           idCustomerAsaas: userInfo.asaasId,
           users: Number(userData.id),
           produto: produto.id,
           metaData: {
-            email: userInfo.email,
-            whatsapp: userInfo.whatsapp,
+            ...userInfo,
             produto: {
-              preco: produto.precoDesconto
+              valor: produto.valor
             }
           }
         };
@@ -289,50 +371,80 @@ export default function PixForm() {
         
       setCurrentTransaction(transaction);
 
-      const responsePix = await fetch('/api/asaas/pix', {
+      // Usar o novo endpoint para criar pagamento PIX
+      const responsePix = await fetch('/api/payments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          customerId: userInfo.asaasId,
-          description: `Assinatura Aicrus Academy - ${userInfo.email}`,
-          value: Number(produto.precoDesconto.toFixed(2))
+          billingType: 'PIX',
+          customer: userInfo.asaasId,
+          value: Number(produto.valor.toFixed(2)),
+          dueDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
+          description: `Assinatura Aicrus Academy - ${userInfo.email}`
         }),
         cache: 'no-store'
       });
 
       if (!responsePix.ok) {
         const errorData = await responsePix.json();
-        console.error('Erro na resposta da API PIX:', errorData);
+        console.error('Erro na resposta da API de pagamento:', errorData);
+        throw new Error(errorData.error || 'Falha ao gerar cobrança PIX');
+      }
+
+      const paymentData = await responsePix.json();
+      safeLog('Pagamento PIX criado com sucesso', { id: paymentData.id });
+
+      // Atualizar a transação com o ID do pagamento
+      if (transaction.id && paymentData.id) {
+        try {
+          await TransactionService.updateTransaction(transaction.id, {
+            idPayAsaas: paymentData.id
+          });
+          safeLog('ID do pagamento atualizado na transação', { paymentId: paymentData.id });
+        } catch (updateError) {
+          console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
+        }
+      }
+
+      // Obter o QR code usando o novo endpoint
+      const pixQrCodeResponse = await fetch(`/api/payments/${paymentData.id}/pixQrCode`, {
+        method: 'GET',
+        cache: 'no-store'
+      });
+
+      if (!pixQrCodeResponse.ok) {
+        const errorData = await pixQrCodeResponse.json();
+        console.error('Erro ao obter QR code PIX:', errorData);
         throw new Error(errorData.error || 'Falha ao gerar QR Code PIX');
       }
 
-      const data = await responsePix.json();
+      const pixQrCodeData = await pixQrCodeResponse.json();
+      
+      // Configurar os dados do PIX com as informações obtidas
+      setPixData({
+        paymentId: paymentData.id,
+        status: paymentData.status,
+        encodedImage: pixQrCodeData.encodedImage,
+        payload: pixQrCodeData.payload,
+        expirationDate: pixQrCodeData.expirationDate
+      });
 
-      try {
-        // Salvar o ID do PIX na tabela de transações
-        await TransactionService.updateTransaction(transaction.id, {
-          idPayAsaas: data.paymentId
-        });
-        
-        safeLog('ID do pagamento atualizado na transação', { paymentId: data.paymentId });
-      } catch (updateError) {
-        console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
-      }
-
-      setPixData(data);
+      // Configurar status do pagamento
       setPaymentStatus({
-        id: data.paymentId,
-        status: 'PENDING',
-        value: produto.precoDesconto,
-        netValue: produto.precoDesconto,
-        description: `Assinatura Aicrus Academy - ${userInfo.email}`,
-        billingType: 'PIX',
+        id: paymentData.id,
+        status: paymentData.status,
+        value: paymentData.value,
+        netValue: paymentData.netValue || paymentData.value,
+        description: paymentData.description,
+        billingType: paymentData.billingType,
         confirmedDate: null,
         paymentDate: null
       });
-      startAutoCheck(data.paymentId);
+      
+      // Iniciar verificação automática do status
+      startAutoCheck(paymentData.id);
     } catch (err) {
       console.error('Erro completo ao gerar PIX:', err);
       setError(
@@ -420,36 +532,36 @@ export default function PixForm() {
   if (!pixData) {
     return (
       <motion.div
-        className="space-y-6"
+        className="space-y-4 sm:space-y-5 lg:space-y-6"
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <div className="bg-gray-50 rounded-lg p-4">
-          <div className="flex items-center space-x-3 text-sm text-gray-500">
-            <QrCodeIcon className="h-5 w-5 text-gray-400" />
+        <div className="bg-gray-50 rounded-md lg:rounded-lg p-3 lg:p-4">
+          <div className="flex items-center space-x-2 lg:space-x-3 text-[10px] sm:text-xs lg:text-sm text-gray-500">
+            <QrCodeIcon className="h-4 w-4 lg:h-5 lg:w-5 text-gray-400" />
             <span>Pagamento para:</span>
             <span className="font-medium text-gray-900">{userInfo?.email}</span>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <div className="space-y-6">
+        <div className="bg-white rounded-md lg:rounded-lg border border-gray-200 p-3 sm:p-4 lg:p-6">
+          <div className="space-y-3 sm:space-y-4 lg:space-y-6">
             <div>
-              <h3 className="text-lg font-medium text-gray-900">Pagamento via PIX</h3>
-              <p className="mt-2 text-sm text-gray-600">
+              <h3 className="text-sm sm:text-base lg:text-lg font-medium text-gray-900">Pagamento via PIX</h3>
+              <p className="mt-1.5 lg:mt-2 text-[10px] sm:text-xs lg:text-sm text-gray-600">
                 Pague instantaneamente usando o QR Code PIX. O acesso será liberado imediatamente após a confirmação do pagamento.
               </p>
             </div>
 
-            <div className="bg-[#0F2B1B]/5 rounded-lg p-4">
-              <div className="flex items-start space-x-3">
+            <div className="bg-[#0F2B1B]/5 rounded-md lg:rounded-lg p-2.5 sm:p-3 lg:p-4">
+              <div className="flex items-start space-x-2 lg:space-x-3">
                 <div className="flex-shrink-0">
-                  <QrCodeIcon className="h-6 w-6 text-[#0F2B1B]" />
+                  <QrCodeIcon className="h-4 w-4 sm:h-5 sm:w-5 lg:h-6 lg:w-6 text-[#0F2B1B]" />
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-[#0F2B1B]">Benefícios do PIX</h4>
-                  <ul className="mt-2 text-sm text-gray-600 space-y-1">
+                  <h4 className="text-[10px] sm:text-xs lg:text-sm font-medium text-[#0F2B1B]">Benefícios do PIX</h4>
+                  <ul className="mt-1 lg:mt-2 text-[9px] sm:text-[10px] lg:text-sm text-gray-600 space-y-0.5 lg:space-y-1">
                     <li>✓ Pagamento instantâneo</li>
                     <li>✓ Liberação imediata do acesso</li>
                     <li>✓ Segurança garantida pelo Banco Central</li>
@@ -461,13 +573,13 @@ export default function PixForm() {
             <button
               onClick={handleGeneratePixQRCode}
               disabled={loading}
-              className="w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-xl shadow-lg text-base font-medium text-white bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B] transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full flex items-center justify-center py-2.5 sm:py-3 lg:py-4 px-4 sm:px-5 lg:px-6 border border-transparent rounded-lg lg:rounded-xl shadow-md lg:shadow-lg text-sm sm:text-base lg:text-base font-medium text-white bg-gradient-to-r from-[#0F2B1B] to-[#1C4F33] hover:from-[#1C4F33] hover:to-[#0F2B1B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0F2B1B] transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
             >
               {loading ? (
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                <div className="animate-spin rounded-full h-4 w-4 sm:h-5 sm:w-5 border-b-2 border-white" />
               ) : (
                 <>
-                  <QrCodeIcon className="h-5 w-5 mr-3" />
+                  <QrCodeIcon className="h-4 w-4 sm:h-5 sm:w-5 mr-2 lg:mr-3" />
                   GERAR QR CODE PIX
                 </>
               )}
@@ -480,48 +592,46 @@ export default function PixForm() {
 
   return (
     <motion.div
-      className="space-y-6"
+      className="space-y-4 sm:space-y-5 lg:space-y-6"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="bg-gray-50 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3 text-sm text-gray-500">
-            <QrCodeIcon className="h-5 w-5 text-gray-400" />
-            <span>QR Code gerado para:</span>
-            <span className="font-medium text-gray-900">{userInfo?.email}</span>
-          </div>
+      <div className="bg-gray-50 rounded-md lg:rounded-lg p-3 lg:p-4">
+        <div className="flex items-center space-x-2 lg:space-x-3 text-[10px] sm:text-xs lg:text-sm text-gray-500">
+          <QrCodeIcon className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-gray-400" />
+          <span>QR Code gerado para:</span>
+          <span className="font-medium text-gray-900">{userInfo?.email}</span>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="space-y-6">
+      <div className="bg-white rounded-md lg:rounded-lg border border-gray-200 p-3 sm:p-4 lg:p-6">
+        <div className="space-y-3 sm:space-y-4 lg:space-y-6">
           <div className="flex justify-center">
-            <div className="bg-gray-100 p-4 rounded-lg">
+            <div className="bg-gray-100 p-2 sm:p-3 lg:p-4 rounded-md lg:rounded-lg">
               <Image
                 src={`data:image/png;base64,${pixData.encodedImage}`}
                 alt="QR Code PIX"
                 width={200}
                 height={200}
-                className="w-48 h-48"
+                className="w-32 h-32 sm:w-40 sm:h-40 lg:w-48 lg:h-48"
               />
             </div>
           </div>
 
           <div>
-            <p className="text-sm text-gray-500 mb-2">Copie o código PIX:</p>
-            <div className="relative flex items-center justify-center space-x-2">
-              <code className="bg-gray-50 px-4 py-2 rounded text-sm font-mono text-gray-900 max-w-[300px] truncate">{pixData.payload}</code>
+            <p className="text-[10px] sm:text-xs lg:text-sm text-gray-500 mb-1 sm:mb-1.5 lg:mb-2">Copie o código PIX:</p>
+            <div className="relative flex items-center justify-center space-x-1.5 sm:space-x-2">
+              <code className="bg-gray-50 px-2 py-1 sm:px-3 sm:py-1.5 lg:px-4 lg:py-2 rounded text-[9px] sm:text-xs lg:text-sm font-mono text-gray-900 max-w-[300px] truncate">{pixData.payload}</code>
               <button
                 onClick={copyPixCode}
-                className="p-2 text-gray-500 hover:text-[#0F2B1B] focus:outline-none"
+                className="p-1 sm:p-1.5 lg:p-2 text-gray-500 hover:text-[#0F2B1B] focus:outline-none"
                 title="Copiar código PIX completo"
               >
                 {isCopied ? (
-                  <CheckIcon className="h-5 w-5 text-[#0F2B1B]" />
+                  <CheckIcon className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-[#0F2B1B]" />
                 ) : (
-                  <ClipboardDocumentIcon className="h-5 w-5" />
+                  <ClipboardDocumentIcon className="h-3 w-3 sm:h-4 sm:w-4 lg:h-5 lg:w-5" />
                 )}
               </button>
               {showToast && (
@@ -529,7 +639,7 @@ export default function PixForm() {
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 10 }}
-                  className="absolute right-[-50px] bg-[#7CB342] text-white px-3 py-1.5 rounded-md shadow-sm text-xs font-medium z-50"
+                  className="absolute right-[-40px] sm:right-[-45px] lg:right-[-50px] bg-[#7CB342] text-white px-1.5 py-0.5 sm:px-2 sm:py-1 lg:px-3 lg:py-1.5 rounded-md shadow-sm text-[8px] sm:text-[10px] lg:text-xs font-medium z-50"
                 >
                   Copiado
                 </motion.div>
@@ -542,37 +652,39 @@ export default function PixForm() {
               status={paymentStatus.status}
               onVerifyClick={!autoCheckInterval ? handleManualCheck : undefined}
               isVerifying={isVerifying}
+              autoCheckActive={autoCheckActive}
+              buttonText="Acessar meu produto"
             />
           )}
 
-          <div className="border-t border-gray-200 pt-6">
-            <h4 className="font-medium text-gray-900 mb-4">Como pagar:</h4>
-            <ol className="text-sm text-gray-600 space-y-3">
+          <div className="border-t border-gray-200 pt-3 sm:pt-4 lg:pt-6">
+            <h4 className="font-medium text-gray-900 mb-2 sm:mb-3 lg:mb-4 text-xs sm:text-sm lg:text-base">Como pagar:</h4>
+            <ol className="text-[9px] sm:text-xs lg:text-sm text-gray-600 space-y-1.5 sm:space-y-2 lg:space-y-3">
               <li className="flex items-start">
-                <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-xs font-medium mr-3">1</span>
+                <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">1</span>
                 <span>Abra o app do seu banco</span>
               </li>
               <li className="flex items-start">
-                <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-xs font-medium mr-3">2</span>
+                <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">2</span>
                 <span>Escolha pagar via PIX com QR Code</span>
               </li>
               <li className="flex items-start">
-                <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-xs font-medium mr-3">3</span>
+                <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">3</span>
                 <span>Escaneie o código acima ou cole o código copiado</span>
               </li>
               <li className="flex items-start">
-                <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-xs font-medium mr-3">4</span>
-                <span>Confirme o valor de R$ {produto?.precoDesconto.toFixed(2)}</span>
+                <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">4</span>
+                <span>Confirme o valor de R$ {produto?.valor.toFixed(2)}</span>
               </li>
               <li className="flex items-start">
-                <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-xs font-medium mr-3">5</span>
+                <span className="flex-shrink-0 flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 rounded-full bg-[#0F2B1B]/5 text-[#0F2B1B] text-[8px] sm:text-[9px] lg:text-xs font-medium mr-1.5 sm:mr-2 lg:mr-3">5</span>
                 <span>Confirme o pagamento</span>
               </li>
             </ol>
           </div>
 
-          <div className="bg-[#0F2B1B]/5 rounded-lg p-4">
-            <p className="text-sm text-[#0F2B1B]">
+          <div className="bg-[#0F2B1B]/5 rounded-md lg:rounded-lg p-2 sm:p-3 lg:p-4">
+            <p className="text-[9px] sm:text-xs lg:text-sm text-[#0F2B1B]">
               Assim que recebermos a confirmação do pagamento, enviaremos um comprovante para seu email ({userInfo?.email}).
             </p>
           </div>
@@ -580,8 +692,12 @@ export default function PixForm() {
       </div>
 
       {error && (
-        <div className="text-red-500 text-sm text-center">
-          {error}
+        <div className="rounded-md bg-red-50 p-2 sm:p-2.5 lg:p-3">
+          <div className="flex">
+            <div className="ml-2">
+              <p className="text-[9px] sm:text-xs lg:text-sm font-medium text-red-800">{error}</p>
+            </div>
+          </div>
         </div>
       )}
     </motion.div>

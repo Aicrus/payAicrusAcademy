@@ -2,9 +2,10 @@ export type Produto = {
   id: number;
   created_at: string;
   nomeProduto: string;
-  preco: number;
+  valorAntigo: number;
   img: string;
   prazo: string;
-  precoDesconto: number;
+  valor: number;
   porcentagemDesconto: string;
+  urlSucesso?: string;
 }; 

@@ -6,7 +6,7 @@ interface TransactionMetaData {
   email?: string;
   whatsapp?: string;
   produto?: {
-    preco: number;
+    valor: number;
   };
   parcelas?: number;
 }
