@@ -291,7 +291,7 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
         users: 8, // ID do usuário fixo por enquanto
         produto: produto.id,
         idCustomerAsaas: userInfo.asaasId,
-        idPayAsaas: pixResponse.id,
+        idPayAsaas: pixResponse.paymentId,
         dataHora: new Date().toISOString(),
         metaData: {
           ...userInfo,
@@ -316,7 +316,7 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
       });
 
       setPixData({
-        paymentId: pixResponse.id,
+        paymentId: pixResponse.paymentId,
         status: pixResponse.status,
         encodedImage: pixResponse.encodedImage,
         payload: pixResponse.payload,
@@ -324,9 +324,9 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
       });
 
       // Iniciar verificação automática imediatamente após gerar o PIX
-      if (pixResponse.id) {
-        console.log('Iniciando verificação automática do pagamento:', pixResponse.id);
-        startAutoCheck(pixResponse.id);
+      if (pixResponse.paymentId) {
+        console.log('Iniciando verificação automática do pagamento:', pixResponse.paymentId);
+        startAutoCheck(pixResponse.paymentId);
       }
 
       // Atualizar o estado da transação atual
