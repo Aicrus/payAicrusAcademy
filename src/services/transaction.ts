@@ -93,6 +93,7 @@ export class TransactionService {
         metodoPagamento: data.metodoPagamento || data.paymentMethod,
         produto: data.produto,
         idPayAsaas: data.idPayAsaas,
+        idCustomerAsaas: data.idCustomerAsaas,
         metaData: data.metaData,
         status: data.status
       };

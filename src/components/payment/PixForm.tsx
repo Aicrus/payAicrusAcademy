@@ -88,11 +88,10 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
     try {
       setIsVerifying(true);
       
+      // Verificar diretamente na API de pagamentos
       try {
         console.log('Verificando status do pagamento:', paymentId);
-        
-        // Usar o serviço de pagamento para verificar o status
-        const response = await fetch(`/api/asaas/payments/${paymentId}`, {
+        const response = await fetch(`/api/asaas/payments/${paymentId}/status`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json'
@@ -101,69 +100,110 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
         });
         
         if (!response.ok) {
-          throw new Error(`Erro ao verificar status: ${response.status}`);
+          console.error(`Erro na resposta HTTP: ${response.status} ${response.statusText}`);
+          const errorText = await response.text();
+          console.error('Corpo da resposta de erro:', errorText?.substring(0, 200) || 'Vazio');
+          throw new Error(`Erro ao verificar status: ${response.status} ${response.statusText}`);
         }
         
-        const statusData = await response.json();
-        console.log('Status do pagamento:', statusData);
+        // Obter o texto da resposta e tentar parsear como JSON
+        const responseText = await response.text();
+        console.log('Resposta bruta da API:', responseText);
         
-        // Atualizar o status do pagamento no estado
-        setPaymentStatus({
-          id: statusData.id,
-          status: statusData.status,
-          value: statusData.value,
-          netValue: statusData.netValue,
-          description: statusData.description,
-          billingType: statusData.billingType,
-          confirmedDate: statusData.confirmedDate,
-          paymentDate: statusData.paymentDate
-        });
+        let statusData;
+        try {
+          statusData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('Erro ao parsear resposta JSON:', parseError);
+          console.error('Corpo da resposta:', responseText?.substring(0, 200) || 'Vazio');
+          throw new Error('Resposta inválida do servidor');
+        }
         
-        // Se tiver uma transação atual, atualizar na tabela
+        console.log('Status do pagamento detalhado:', statusData);
+        
+        if (statusData && statusData.status) {
+          // Atualizar o status do pagamento
+          setPaymentStatus(prevStatus => ({
+            ...prevStatus!,
+            status: statusData.status,
+            confirmedDate: statusData.confirmedDate || null,
+            paymentDate: statusData.paymentDate || null
+          }));
+          
+          // Atualizar a transação com o status recebido
+          if (currentTransaction?.id) {
+            try {
+              console.log('Atualizando status da transação para:', statusData.status);
+              await TransactionService.updateTransaction(String(currentTransaction.id), {
+                status: statusData.status
+              });
+              console.log('Status da transação atualizado com sucesso');
+              
+              // Se o pagamento foi confirmado, finalizar a transação
+              if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(statusData.status)) {
+                console.log('Pagamento confirmado, finalizando transação...');
+                try {
+                  // Converter o ID para número antes de passar para a função
+                  const transactionId = Number(currentTransaction.id);
+                  await TransactionService.finalizeTransaction(transactionId);
+                  console.log('Transação finalizada com sucesso');
+                  
+                  // Redirecionar para a página de sucesso ou mostrar mensagem
+                  window.location.href = '/success';
+                } catch (error) {
+                  console.error('Erro ao finalizar transação:', error);
+                }
+              }
+            } catch (updateError) {
+              console.error('Erro ao atualizar status da transação:', updateError);
+            }
+          }
+          
+          return statusData.status;
+        }
+      } catch (apiError) {
+        console.error('Erro ao verificar status via API:', apiError);
+        
+        // Caso a API falhe, tenta verificar na tabela de transações como fallback
         if (currentTransaction?.id) {
+          console.log('Tentando verificar status na tabela de transações:', currentTransaction.id);
+          
           try {
-            console.log('Atualizando transação:', currentTransaction.id);
-            
-            // Atualizar a transação com os novos dados
-            await TransactionService.updateTransaction(String(currentTransaction.id), {
-              status: statusData.status,
-              valor: statusData.value,
-              dataHora: new Date().toISOString(),
-              metaData: {
-                ...currentTransaction.metaData,
-                statusAsaas: statusData.status,
-                valorPago: statusData.value,
-                dataPagamento: statusData.paymentDate,
-                dataConfirmacao: statusData.confirmedDate
+            const response = await fetch(`/api/transactions/${currentTransaction.id}`, {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json'
               }
             });
             
-            console.log('Transação atualizada com sucesso');
-            
-            // Se o pagamento foi confirmado, finalizar a transação
-            if (['RECEIVED', 'CONFIRMED', 'RECEIVED_IN_CASH'].includes(statusData.status)) {
-              console.log('Pagamento confirmado, finalizando transação...');
-              
-              try {
-                await TransactionService.finalizeTransaction(Number(currentTransaction.id));
-                console.log('Transação finalizada com sucesso');
-                
-                // Redirecionar para a página de sucesso
-                window.location.href = '/success';
-              } catch (error) {
-                console.error('Erro ao finalizar transação:', error);
-              }
+            if (!response.ok) {
+              throw new Error(`Erro ao buscar transação: ${response.status} ${response.statusText}`);
             }
-          } catch (updateError) {
-            console.error('Erro ao atualizar transação:', updateError);
+            
+            const transactionData = await response.json();
+            console.log('Dados da transação:', transactionData);
+            
+            if (transactionData && transactionData.status) {
+              // Atualizar o status do pagamento
+              setPaymentStatus(prevStatus => ({
+                ...prevStatus!,
+                status: transactionData.status,
+                confirmedDate: transactionData.dataHora || null,
+                paymentDate: transactionData.dataHora || null
+              }));
+              
+              return transactionData.status;
+            }
+          } catch (fallbackError) {
+            console.error('Erro ao buscar transação (fallback):', fallbackError);
           }
         }
-        
-        return statusData.status;
-      } catch (error) {
-        console.error('Erro ao verificar status:', error);
-        throw error;
       }
+      
+      return null;
+    } catch (error) {
+      console.error('Erro ao verificar status do pagamento:', error);
+      return null;
     } finally {
       setIsVerifying(false);
     }
@@ -252,8 +292,110 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
         valor: valorPix
       });
 
-      // Criar a cobrança PIX
-      const response = await fetch('/api/asaas/pix', {
+      // Buscar usuário no Supabase
+      const response = await fetch(`/api/asaas/customers/${userInfo.asaasId}`);
+      if (!response.ok) {
+        throw new Error('Erro ao buscar informações do usuário');
+      }
+      const userData = await response.json();
+
+      // Validar se o usuário foi encontrado e tem ID
+      if (!userData || !userData.id) {
+        console.error('Dados do usuário inválidos:', userData);
+        throw new Error('Usuário não encontrado no sistema');
+      }
+
+      console.log('Usuário encontrado:', {
+        id: userData.id,
+        email: userData.email,
+        idCustomerAsaas: userData.idCustomerAsaas
+      });
+
+      // Buscar transação pendente existente
+      const response2 = await fetch(`/api/transactions/pending/${userData.id}`);
+      let transaction = null;
+      
+      if (response2.ok) {
+        let pendingTransaction = await response2.json();
+        if (pendingTransaction && pendingTransaction.id) {
+          console.log('Transação pendente encontrada:', pendingTransaction);
+          
+          // Verificar se o valor da transação está atualizado com o valor atual do produto
+          const valorAtualizado = pendingTransaction.valor === valorPix;
+          
+          if (!valorAtualizado) {
+            console.log('Valor do produto foi alterado, atualizando transação:', {
+              valorAntigo: pendingTransaction.valor,
+              valorNovo: valorPix
+            });
+          }
+          
+          // Atualizar transação existente para PIX
+          try {
+            await TransactionService.updateTransaction(pendingTransaction.id, {
+              valor: valorPix,
+              produto: produto.id,
+              metodoPagamento: 'PIX',
+              idCustomerAsaas: userInfo.asaasId,
+              metaData: {
+                ...pendingTransaction.metaData,
+                produto: {
+                  valor: valorPix
+                },
+                valorAtualizado: true
+              }
+            });
+            
+            transaction = pendingTransaction;
+            console.log('Transação atualizada para PIX:', {
+              id: transaction.id,
+              valorAtualizado: valorPix,
+              idCustomerAsaas: userInfo.asaasId
+            });
+          } catch (updateError) {
+            console.error('Erro ao atualizar valor da transação:', updateError);
+            // Se falhar em atualizar, criar nova transação
+            pendingTransaction = null;
+          }
+        }
+      }
+
+      // Se não encontrou transação pendente, cria uma nova
+      if (!transaction) {
+        const transactionData: TransactionData = {
+          valor: valorPix,
+          status: 'PENDING',
+          metodoPagamento: 'PIX',
+          users: userData.id,
+          produto: produto.id,
+          idCustomerAsaas: userData.idCustomerAsaas || userInfo.asaasId,
+          dataHora: new Date().toISOString(),
+          metaData: {
+            ...userInfo,
+            produto: {
+              valor: valorPix
+            }
+          }
+        };
+
+        console.log('Criando transação com dados:', transactionData);
+        
+        transaction = await TransactionService.createTransaction(transactionData);
+        
+        if (!transaction || !transaction.id) {
+          throw new Error('Falha ao criar transação: ID não retornado');
+        }
+
+        console.log('Transação criada com sucesso:', {
+          id: transaction.id,
+          status: transaction.status,
+          users: transaction.users
+        });
+      }
+        
+      // Depois gerar o PIX
+      console.log('Enviando requisição para gerar PIX...');
+      const responsePix = await fetch('/api/asaas/pix', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -266,72 +408,43 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
         cache: 'no-store'
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
+      if (!responsePix.ok) {
+        const errorText = await responsePix.text();
         console.error('Erro na resposta da API PIX:', errorText);
-        
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { error: 'Erro ao processar resposta do servidor' };
-        }
-        
-        throw new Error(errorData.error || 'Falha ao gerar PIX');
+        throw new Error('Falha ao gerar PIX');
       }
 
-      const pixResponse = await response.json();
+      const pixResponse = await responsePix.json();
       console.log('Dados do PIX recebidos:', pixResponse);
 
-      // Primeiro criar a transação no banco
-      const transactionData: TransactionData = {
-        valor: valorPix,
-        status: 'PENDING',
-        metodoPagamento: 'PIX',
-        users: 8, // ID do usuário fixo por enquanto
-        produto: produto.id,
-        idCustomerAsaas: userInfo.asaasId,
-        idPayAsaas: pixResponse.paymentId,
-        dataHora: new Date().toISOString(),
-        metaData: {
-          ...userInfo,
-          produto: {
-            valor: valorPix
-          }
-        }
-      };
-
-      console.log('Criando transação com dados:', transactionData);
-      
-      const transaction = await TransactionService.createTransaction(transactionData);
-      
-      if (!transaction || !transaction.id) {
-        throw new Error('Falha ao criar transação: ID não retornado');
+      // Atualizar transação com ID do pagamento
+      try {
+        await TransactionService.updateTransaction(transaction.id, {
+          idPayAsaas: pixResponse.id,
+          idCustomerAsaas: userInfo.asaasId
+        });
+        console.log('ID do pagamento atualizado na transação:', pixResponse.id);
+      } catch (updateError) {
+        console.error('Erro ao atualizar ID do pagamento na transação:', updateError);
+        // Não interromper o fluxo por erro na atualização
       }
 
-      console.log('Transação criada com sucesso:', {
-        id: transaction.id,
-        status: transaction.status,
-        idPayAsaas: transaction.idPayAsaas
-      });
-
+      // Configurar dados do PIX para exibição
       setPixData({
-        paymentId: pixResponse.paymentId,
+        paymentId: pixResponse.id,
         status: pixResponse.status,
         encodedImage: pixResponse.encodedImage,
         payload: pixResponse.payload,
         expirationDate: pixResponse.expirationDate
       });
 
-      // Iniciar verificação automática imediatamente após gerar o PIX
-      if (pixResponse.paymentId) {
-        console.log('Iniciando verificação automática do pagamento:', pixResponse.paymentId);
-        startAutoCheck(pixResponse.paymentId);
+      // Iniciar verificação automática
+      if (pixResponse.id) {
+        console.log('Iniciando verificação automática do pagamento:', pixResponse.id);
+        startAutoCheck(pixResponse.id);
       }
 
-      // Atualizar o estado da transação atual
       setCurrentTransaction(transaction);
-
     } catch (err) {
       console.error('Erro completo ao gerar PIX:', err);
       setError(

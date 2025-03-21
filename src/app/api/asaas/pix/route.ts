@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
     // 3. Retornar dados combinados
     return NextResponse.json({
-      paymentId: payment.id,
+      id: payment.id,
       status: payment.status,
       value: payment.value,
       netValue: payment.netValue,
