@@ -121,6 +121,7 @@ function ProdutoInfo({
                     placeholder="Cupom de desconto" 
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value)}
+                    inputMode="text"
                     className="w-full bg-white/10 border border-white/20 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-white/30 focus:border-white/30 placeholder-white/40"
                   />
                   {cupomError && (
