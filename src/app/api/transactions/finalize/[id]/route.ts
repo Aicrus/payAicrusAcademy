@@ -117,6 +117,9 @@ export async function POST(request: Request) {
       userId: transaction.users
     });
 
+    console.log('Iniciando chamada para o Google Cloud Function');
+    console.log('Token sendo usado:', process.env.NEXT_PUBLIC_GCLOUD_TOKEN);
+
     const currentDate = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const transactionHash = `TP${Math.random().toString(36).substring(2, 15).toUpperCase()}`;
     const orderHash = `TO${Math.random().toString(36).substring(2, 15).toUpperCase()}`;
@@ -125,7 +128,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `bearer nMu1cvFOsWjYmllSkc0Sh8gDF8VYqMD6TiWXToK1C9St7vWgv1JyVEG6CjpvH2XtKl968GB5qYLBRSUSdkufYs10gLQwwop0T6Y2`
+        'Authorization': `bearer ${process.env.NEXT_PUBLIC_GCLOUD_TOKEN}`
       },
       body: JSON.stringify({
         status_date: "2025-03-18 09:00:23",
@@ -242,10 +245,16 @@ export async function POST(request: Request) {
     });
 
     if (!firebaseResponse.ok) {
-      console.error('Erro ao processar compra no Ticto:', await firebaseResponse.text());
+      const errorText = await firebaseResponse.text();
+      console.error('Erro ao processar compra no Ticto:', {
+        status: firebaseResponse.status,
+        statusText: firebaseResponse.statusText,
+        error: errorText
+      });
       // Não vamos lançar erro aqui para não interromper o fluxo
     } else {
-      console.log('Compra processada com sucesso no Ticto');
+      const responseData = await firebaseResponse.json();
+      console.log('Resposta do Ticto:', responseData);
     }
 
     return NextResponse.json(updatedTransaction);
