@@ -1,22 +1,16 @@
 import { motion } from 'framer-motion';
 import { CheckCircleIcon, XCircleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
-import { useEffect, useState } from 'react';
-import { TransactionService } from '@/services/transaction';
-import { useRouter } from 'next/navigation';
-import { useProduto } from '@/contexts/ProdutoContext';
 
 interface PaymentStatusProps {
   status: 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH';
   onVerifyClick?: () => void;
   isVerifying?: boolean;
-  autoCheckActive?: boolean;
-  buttonText?: string;
 }
 
 const statusConfig = {
   PENDING: {
     color: 'text-yellow-600',
-    bgColor: 'bg-white',
+    bgColor: 'bg-yellow-50',
     text: 'Aguardando pagamento',
     icon: null
   },
@@ -58,52 +52,10 @@ const spinTransition = {
   ease: "linear"
 };
 
-export default function PaymentStatus({ status, onVerifyClick, isVerifying, autoCheckActive, buttonText = 'Entendi' }: PaymentStatusProps) {
+export default function PaymentStatus({ status, onVerifyClick, isVerifying }: PaymentStatusProps) {
   const config = statusConfig[status];
   const Icon = config.icon;
   const isPaid = status === 'RECEIVED' || status === 'CONFIRMED' || status === 'RECEIVED_IN_CASH';
-  const [showDialog, setShowDialog] = useState(false);
-  const router = useRouter();
-  const { produto } = useProduto();
-  
-  // Efeito para mostrar o diálogo quando o pagamento for confirmado
-  useEffect(() => {
-    if (isPaid) {
-      console.log('Pagamento confirmado, exibindo diálogo...', status);
-      setShowDialog(true);
-    }
-  }, [isPaid, status]);
-
-  // Função para limpar o cache e recarregar a página
-  const handleConfirmation = () => {
-    console.log('Limpando cache e redirecionando...');
-    
-    // Limpar o cache de transação
-    try {
-      TransactionService.clearCache();
-      
-      // Limpar outros caches do localStorage
-      localStorage.removeItem('userInfo');
-      localStorage.removeItem('paymentInfo');
-      localStorage.removeItem('productInfo');
-      
-      console.log('Cache limpo com sucesso');
-    } catch (error) {
-      console.error('Erro ao limpar cache:', error);
-    }
-    
-    // Fechar o diálogo
-    setShowDialog(false);
-    
-    // Definir a URL de redirecionamento baseada no produto
-    const redirectUrl = produto?.urlSucesso || '/';
-    console.log('Redirecionando para:', redirectUrl);
-    
-    // Redirecionar para a URL de sucesso do produto ou para a página inicial como fallback
-    setTimeout(() => {
-      window.location.href = redirectUrl;
-    }, 500);
-  };
 
   // Status sempre visível
   return (
@@ -149,10 +101,8 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying, auto
                 {config.text}
               </span>
               {status === 'PENDING' && (
-                <span className="text-xs text-gray-500">
-                  {autoCheckActive 
-                    ? "Verificação automática em andamento" 
-                    : "Clique em verificar para atualizar o status"}
+                <span className="text-xs text-gray-400">
+                  Verificação automática em andamento
                 </span>
               )}
             </div>
@@ -161,7 +111,7 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying, auto
           {status === 'PENDING' && onVerifyClick && (
             <button
               onClick={onVerifyClick}
-              disabled={isVerifying || autoCheckActive}
+              disabled={isVerifying}
               className="text-xs text-gray-500 hover:text-gray-700 focus:outline-none disabled:opacity-50 transition-colors flex items-center space-x-1"
             >
               {isVerifying ? (
@@ -175,17 +125,6 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying, auto
                   </motion.div>
                   <span>Verificando</span>
                 </>
-              ) : autoCheckActive ? (
-                <>
-                  <motion.div
-                    className="w-3 h-3"
-                    animate={{ rotate: 360 }}
-                    transition={spinTransition}
-                  >
-                    <ArrowPathIcon className="w-3 h-3" />
-                  </motion.div>
-                  <span>Verificando automaticamente</span>
-                </>
               ) : (
                 <>
                   <ArrowPathIcon className="w-3 h-3" />
@@ -198,9 +137,9 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying, auto
       </motion.div>
 
       {/* Dialog modal para pagamento confirmado */}
-      {showDialog && isPaid && (
+      {isPaid && (
         <div className="fixed inset-0 z-50 min-h-screen">
-          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setShowDialog(false)} />
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm" />
           <div className="fixed inset-0 flex items-center justify-center p-4">
             <motion.div
               className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden"
@@ -239,20 +178,6 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying, auto
                   <p className="mt-2 text-gray-600">
                     Seu acesso será liberado em instantes.
                   </p>
-                </motion.div>
-                
-                <motion.div
-                  className="mt-6 w-full"
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  <button
-                    onClick={handleConfirmation}
-                    className="w-full py-2 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
-                  >
-                    {buttonText}
-                  </button>
                 </motion.div>
               </div>
             </motion.div>

@@ -240,8 +240,8 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
           valor: valorCartao,
           status: 'PENDING',
           metodoPagamento: 'CREDIT_CARD',
-          userId: userData.id,
-          productId: produto.id,
+          users: userData.id,
+          produto: produto.id,
           idCustomerAsaas: userInfo.asaasId,
           metaData: {
             email: userInfo.email,
@@ -595,6 +595,13 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
             <PaymentStatus 
               status={paymentStatus.status} 
               buttonText="Acessar meu produto"
+              paymentMethod="credit-card"
+              paymentDetails={{
+                valor: valorCartao,
+                parcelas: selectedInstallment,
+                valorParcela: parcelas[selectedInstallment - 1]?.valorParcela,
+                produto: produto?.id
+              }}
             />
           </div>
         </div>

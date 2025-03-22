@@ -221,10 +221,10 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
     // Verificar imediatamente uma vez
     checkPaymentStatus(paymentId);
     
-    // Configurar para verificar a cada 15 segundos por 5 minutos
+    // Configurar para verificar a cada 12 segundos por 2.5 minutos (150 segundos)
     const checkCount = { current: 0 };
-    const maxChecks = 20; // 5 minutos = 20 verificações a cada 15 segundos
-    const checkInterval = 15000; // 15 segundos
+    const maxChecks = 13; // 2.5 minutos = 13 verificações a cada 12 segundos (156 segundos)
+    const checkInterval = 12000; // 12 segundos
     
     const interval = setInterval(async () => {
       checkCount.current += 1;
@@ -240,7 +240,7 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
         setAutoCheckActive(false);
         setAutoCheckEnded(true);
       } else if (checkCount.current >= maxChecks) {
-        // Parar após 20 verificações (5 minutos)
+        // Parar após 13 verificações (2.5 minutos)
         console.log('Máximo de verificações atingido, parando verificação automática');
         clearInterval(interval);
         setAutoCheckInterval(null);
@@ -649,12 +649,17 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
           </div>
 
           {paymentStatus && (
-            <PaymentStatus
-              status={paymentStatus.status}
-              onVerifyClick={!autoCheckInterval ? handleManualCheck : undefined}
+            <PaymentStatus 
+              status={paymentStatus.status} 
+              buttonText="Acessar meu produto"
+              onVerifyClick={handleManualCheck}
               isVerifying={isVerifying}
               autoCheckActive={autoCheckActive}
-              buttonText="Acessar meu produto"
+              paymentMethod="pix"
+              paymentDetails={{
+                valor: valorPix,
+                produto: produto?.id
+              }}
             />
           )}
 
