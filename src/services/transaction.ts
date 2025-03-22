@@ -184,74 +184,11 @@ export class TransactionService {
 
   static async finalizeTransaction(id: number) {
     try {
-      // Primeiro, buscar os dados da transação
-      const { data: transaction, error: fetchError } = await supabase
-        .from('transacoes')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchError) {
-        throw new Error(`Erro ao buscar transação: ${fetchError.message}`);
-      }
-
-      // Verificar se já existe uma compra ativa para este usuário e produto
-      const { data: existingPurchase } = await supabase
-        .from('comprasUser')
-        .select('*')
-        .eq('users', transaction.users)
-        .eq('produto', transaction.produto)
-        .eq('statusAcesso', 'ativo')
-        .single();
-
-      const dataInicio = new Date();
-      // Definir data de fim como 1 ano após o início
-      const dataFim = new Date(dataInicio);
-      dataFim.setFullYear(dataFim.getFullYear() + 1);
-
-      if (existingPurchase) {
-        // Atualizar a data de fim da compra existente
-        const { error: updateError } = await supabase
-          .from('comprasUser')
-          .update({
-            dataFim: dataFim.toISOString(),
-            transacao: id,
-            ultimaAtualizacao: new Date().toISOString()
-          })
-          .eq('id', existingPurchase.id);
-
-        if (updateError) {
-          throw new Error(`Erro ao atualizar compra: ${updateError.message}`);
-        }
-      } else {
-        // Criar nova compra
-        const { error: insertError } = await supabase
-          .from('comprasUser')
-          .insert({
-            users: transaction.users,
-            produto: transaction.produto,
-            transacao: id,
-            dataInicio: dataInicio.toISOString(),
-            dataFim: dataFim.toISOString(),
-            statusAcesso: 'ativo',
-            ultimaAtualizacao: new Date().toISOString()
-          });
-
-        if (insertError) {
-          throw new Error(`Erro ao criar compra: ${insertError.message}`);
-        }
-      }
-
-      // Atualizar status da transação
-      const response = await fetch(`/api/transactions/${id}`, {
-        method: 'PATCH',
+      const response = await fetch(`/api/transactions/finalize/${id}`, {
+        method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: 'CONFIRMED',
-          dataHora: new Date().toISOString()
-        }),
+          'Content-Type': 'application/json'
+        }
       });
 
       if (!response.ok) {

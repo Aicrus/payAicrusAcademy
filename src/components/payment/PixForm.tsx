@@ -371,10 +371,15 @@ export default function PixForm({ discountApplied, onProcessingStart, onProcessi
           idCustomerAsaas: userData.idCustomerAsaas || userInfo.asaasId,
           dataHora: new Date().toISOString(),
           metaData: {
-            ...userInfo,
+            cpf: userInfo.cpf,
+            name: userInfo.name,
+            email: userInfo.email,
+            asaasId: userInfo.asaasId,
             produto: {
               valor: valorPix
-            }
+            },
+            dialCode: userInfo.dialCode,
+            whatsapp: userInfo.whatsapp
           }
         };
 

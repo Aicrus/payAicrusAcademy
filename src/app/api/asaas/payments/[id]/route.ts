@@ -1,12 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { ASAAS_CONFIG } from '@/config/asaas';
 
-export async function GET(
-  request: Request,
-  context: { params: { id: string } }
-) {
+export async function GET(request: Request): Promise<NextResponse> {
   try {
-    const paymentId = context.params.id;
+    const url = new URL(request.url);
+    const segments = url.pathname.split('/');
+    const paymentId = segments[segments.length - 1];
 
     if (!paymentId) {
       return NextResponse.json(
@@ -17,10 +16,9 @@ export async function GET(
 
     console.log('Verificando status do pagamento:', paymentId);
 
-    const url = `${ASAAS_CONFIG.API_URL}/payments/${paymentId}`;
     const headers = ASAAS_CONFIG.getHeaders();
 
-    const response = await fetch(url, {
+    const response = await fetch(`${ASAAS_CONFIG.API_URL}/payments/${paymentId}`, {
       method: 'GET',
       headers,
       cache: 'no-store'

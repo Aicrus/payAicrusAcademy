@@ -154,10 +154,15 @@ export default function BoletoForm({ discountApplied, onProcessingStart, onProce
           produto: produto.id,
           idCustomerAsaas: userInfo.asaasId,
           metaData: {
-            ...userInfo,
+            cpf: userInfo.cpf,
+            name: userInfo.name,
+            email: userInfo.email,
+            asaasId: userInfo.asaasId,
             produto: {
               valor: valorBoleto
-            }
+            },
+            dialCode: userInfo.dialCode,
+            whatsapp: userInfo.whatsapp
           }
         };
 

@@ -244,11 +244,15 @@ export default function CreditCardForm({ discountApplied, onProcessingStart, onP
           produto: produto.id,
           idCustomerAsaas: userInfo.asaasId,
           metaData: {
+            cpf: userInfo.cpf,
+            name: userInfo.name,
             email: userInfo.email,
-            whatsapp: userInfo.whatsapp,
+            asaasId: userInfo.asaasId,
             produto: {
               valor: valorCartao
-            }
+            },
+            dialCode: userInfo.dialCode,
+            whatsapp: userInfo.whatsapp
           }
         };
 
