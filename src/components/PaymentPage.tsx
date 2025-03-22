@@ -367,7 +367,7 @@ export default function PaymentPage() {
               <div className="space-y-3 mb-1 mt-[-30px]">
                 <div className="text-white/60 text-[9px] sm:text-[10px] space-y-0.5">
                   <p>
-                    Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <a href="/termos" className="underline font-bold cursor-pointer hover:text-white/80 transition-colors">Termos</a> e a <a href="/privacidade" className="underline font-bold cursor-pointer hover:text-white/80 transition-colors">Política de Privacidade</a>.
+                    Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <a href="https://www.aicrustech.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold cursor-pointer hover:text-white/80 transition-colors">Termos</a> e a <a href="https://www.aicrustech.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold cursor-pointer hover:text-white/80 transition-colors">Política de Privacidade</a>.
                   </p>
                   <p>
                     Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
@@ -419,7 +419,7 @@ export default function PaymentPage() {
                       onClick={() => handlePaymentMethodChange('credit-card')}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`relative flex flex-col items-center justify-center p-2 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
+                      className={`relative flex flex-col items-center justify-center p-3 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
                         selectedMethod === 'credit-card'
                           ? 'bg-white shadow-lg border-2 border-[#0F2B1B] text-[#0F2B1B]'
                           : 'bg-gray-50 hover:bg-white hover:shadow-md text-gray-600 border border-gray-100'
@@ -430,12 +430,12 @@ export default function PaymentPage() {
                           ? 'bg-[#0F2B1B]' 
                           : 'bg-gray-200'
                       }`} />
-                      <CreditCardIcon className={`h-4 w-4 sm:h-5 sm:w-5 lg:h-5 lg:w-5 mb-1 sm:mb-1.5 lg:mb-1.5 ${
+                      <CreditCardIcon className={`h-5 w-5 sm:h-5 sm:w-5 lg:h-5 lg:w-5 mb-1 sm:mb-1.5 lg:mb-1.5 ${
                         selectedMethod === 'credit-card'
                           ? 'text-[#0F2B1B]'
                           : 'text-gray-400'
                       }`} />
-                      <span className="block text-[10px] sm:text-xs lg:text-xs font-medium text-center">
+                      <span className="block text-[11px] sm:text-xs lg:text-xs font-medium text-center">
                         Cartão de Crédito
                       </span>
                       {selectedMethod === 'credit-card' && (
@@ -451,7 +451,7 @@ export default function PaymentPage() {
                       onClick={() => handlePaymentMethodChange('pix')}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`relative flex flex-col items-center justify-center p-2 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
+                      className={`relative flex flex-col items-center justify-center p-3 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
                         selectedMethod === 'pix'
                           ? 'bg-white shadow-lg border-2 border-[#0F2B1B] text-[#0F2B1B]'
                           : 'bg-gray-50 hover:bg-white hover:shadow-md text-gray-600 border border-gray-100'
@@ -462,12 +462,12 @@ export default function PaymentPage() {
                           ? 'bg-[#0F2B1B]' 
                           : 'bg-gray-200'
                       }`} />
-                      <QrCodeIcon className={`h-4 w-4 sm:h-5 sm:w-5 lg:h-5 lg:w-5 mb-1 sm:mb-1.5 lg:mb-1.5 ${
+                      <QrCodeIcon className={`h-5 w-5 sm:h-5 sm:w-5 lg:h-5 lg:w-5 mb-1 sm:mb-1.5 lg:mb-1.5 ${
                         selectedMethod === 'pix'
                           ? 'text-[#0F2B1B]'
                           : 'text-gray-400'
                       }`} />
-                      <span className="block text-[10px] sm:text-xs lg:text-xs font-medium text-center">
+                      <span className="block text-[11px] sm:text-xs lg:text-xs font-medium text-center">
                         PIX
                       </span>
                       {selectedMethod === 'pix' && (
@@ -483,7 +483,7 @@ export default function PaymentPage() {
                       onClick={() => handlePaymentMethodChange('boleto')}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.98 }}
-                      className={`relative flex flex-col items-center justify-center p-2 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
+                      className={`relative flex flex-col items-center justify-center p-3 sm:p-3 lg:p-3 rounded-lg sm:rounded-xl transition-all ${
                         selectedMethod === 'boleto'
                           ? 'bg-white shadow-lg border-2 border-[#0F2B1B] text-[#0F2B1B]'
                           : 'bg-gray-50 hover:bg-white hover:shadow-md text-gray-600 border border-gray-100'
@@ -494,12 +494,12 @@ export default function PaymentPage() {
                           ? 'bg-[#0F2B1B]' 
                           : 'bg-gray-200'
                       }`} />
-                      <DocumentTextIcon className={`h-4 w-4 sm:h-5 sm:w-5 lg:h-5 lg:w-5 mb-1 sm:mb-1.5 lg:mb-1.5 ${
+                      <DocumentTextIcon className={`h-5 w-5 sm:h-5 sm:w-5 lg:h-5 lg:w-5 mb-1 sm:mb-1.5 lg:mb-1.5 ${
                         selectedMethod === 'boleto'
                           ? 'text-[#0F2B1B]'
                           : 'text-gray-400'
                       }`} />
-                      <span className="block text-[10px] sm:text-xs lg:text-xs font-medium text-center">
+                      <span className="block text-[11px] sm:text-xs lg:text-xs font-medium text-center">
                         Boleto
                       </span>
                       {selectedMethod === 'boleto' && (
@@ -563,7 +563,7 @@ export default function PaymentPage() {
               {/* Mobile View - Texto legal */}
               <div className="lg:hidden mt-2 space-y-0.5 text-gray-500 text-[9px] sm:text-[10px]">
                 <p>
-                  Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <a href="/termos" className="underline font-bold cursor-pointer hover:text-gray-700 transition-colors">Termos</a> e a <a href="/privacidade" className="underline font-bold cursor-pointer hover:text-gray-700 transition-colors">Política de Privacidade</a>.
+                  Ao clicar em <span className="font-semibold">Comprar agora</span>, declaro que li e concordo com os <a href="https://www.aicrustech.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold cursor-pointer hover:text-gray-700 transition-colors">Termos</a> e a <a href="https://www.aicrustech.com/" target="_blank" rel="noopener noreferrer" className="underline font-bold cursor-pointer hover:text-gray-700 transition-colors">Política de Privacidade</a>.
                 </p>
                 <p>
                   Autorizo o processamento dos meus dados para esta e futuras cobranças. Confirmo que sou maior de idade ou estou autorizado e acompanhado por um responsável legal.
