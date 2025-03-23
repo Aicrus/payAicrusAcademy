@@ -8,7 +8,6 @@ import { useProduto } from '@/contexts/ProdutoContext';
 import { TransactionService } from '@/services/transaction';
 import type { TransactionData } from '@/services/transaction';
 import { formatarMoeda } from '@/utils/formatters';
-import PaymentStatus from './PaymentStatus';
 
 interface BoletoPaymentResponse {
   paymentId: string;
@@ -488,16 +487,6 @@ export default function BoletoForm({ discountApplied, onProcessingStart, onProce
               Assim que recebermos a confirmação do pagamento, enviaremos um comprovante para seu email ({userInfo?.email}).
             </p>
           </div>
-
-          <PaymentStatus 
-            status={boletoData.status as 'PENDING' | 'RECEIVED' | 'CONFIRMED' | 'OVERDUE' | 'REFUNDED' | 'RECEIVED_IN_CASH'} 
-            buttonText="Acessar meu produto"
-            paymentMethod="boleto"
-            paymentDetails={{
-              valor: valorBoleto,
-              produto: produto?.id
-            }}
-          />
         </div>
       </div>
 

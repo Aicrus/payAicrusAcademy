@@ -22,7 +22,7 @@ const statusConfig = {
   PENDING: {
     color: 'text-yellow-600',
     bgColor: 'bg-yellow-50',
-    text: 'Aguardando pagamento',
+    text: (paymentMethod: string) => paymentMethod === 'pix' ? 'Aguardando pagamento' : '',
     icon: null
   },
   RECEIVED: {
@@ -136,9 +136,9 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying, auto
             )}
             <div className="flex flex-col">
               <span className={`text-[13px] sm:text-[13px] lg:text-sm font-medium ${config.color}`}>
-                {config.text}
+                {typeof config.text === 'function' ? config.text(paymentMethod || '') : config.text}
               </span>
-              {status === 'PENDING' && (
+              {status === 'PENDING' && paymentMethod === 'pix' && (
                 <span className="text-[11px] sm:text-[11px] lg:text-xs text-gray-400">
                   {autoCheckActive 
                     ? "Verificação automática em andamento"
@@ -149,7 +149,7 @@ export default function PaymentStatus({ status, onVerifyClick, isVerifying, auto
             </div>
           </div>
 
-          {status === 'PENDING' && onVerifyClick && !autoCheckActive && (
+          {status === 'PENDING' && paymentMethod === 'pix' && onVerifyClick && !autoCheckActive && (
             <button
               onClick={onVerifyClick}
               disabled={isVerifying}
