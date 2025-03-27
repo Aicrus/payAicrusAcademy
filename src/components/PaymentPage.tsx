@@ -348,7 +348,7 @@ export default function PaymentPage() {
         <div className="min-h-screen flex flex-col lg:flex-row">
           {/* Left side - Visível apenas em desktop (lg) */}
           <div className="hidden lg:flex lg:w-1/2 h-screen lg:fixed lg:top-0 lg:left-0 bg-[#0F2B1B] justify-center overflow-y-auto">
-            <div className="flex flex-col max-w-lg w-full py-8 px-8">
+            <div className="flex flex-col w-full max-w-xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
               <ProdutoInfo 
                 produto={produto} 
                 couponCode={couponCode}
@@ -387,7 +387,7 @@ export default function PaymentPage() {
 
           {/* Right side - Full width em mobile e tablet, metade em desktop */}
           <div className="w-full lg:w-1/2 min-h-screen lg:ml-[50%] bg-white">
-            <div className="max-w-lg mx-auto py-4 sm:py-6 lg:py-12 px-3 sm:px-4 lg:px-8">
+            <div className="w-full lg:max-w-xl lg:mx-auto py-4 sm:py-6 lg:py-12 px-3 sm:px-4 lg:px-8">
               {/* Mobile & Tablet View Header com informações do produto */}
               <div className="lg:hidden space-y-4 mb-5 bg-[#0F2B1B] rounded-lg p-4 sm:p-5">
                 <ProdutoInfo 
